@@ -181,7 +181,7 @@ if True:
 
     calibration.rename(columns={calibration.columns[0]:
                                     _normalize_label(calibration.columns[0])},
-                    inplace=True)
+                       inplace=True)
     fixre=re.compile(ur'^MCFDCIS\.COM$')
     calibration.rename(columns=lambda l: fixre.sub(u'MCF10DCIS.COM', l),
                        inplace=True)
@@ -317,7 +317,7 @@ if True:
 
     glob = globals()
     for name in (u'data data0 data1 platedata controls1 background '
-                 'negdata negcrls comparison1'.split()):
+                 u'negdata negcrls comparison1'.split()):
         df = glob[name]
         df.to_csv(tsv_path(name), '\t', index=False,
                   float_format='%.1f')
