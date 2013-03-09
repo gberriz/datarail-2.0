@@ -2,8 +2,42 @@
 * structure/format of archive files (HDF5?).
 * functionality required for processing input spreadsheets
 ** (comments on pandas)
-* conventions for "fiduciary measurements" (aka "reference measurements"), such as controls, background
-* DICTIONARY
+* conventions for "fiduciary measurements" (aka "reference
+  measurements"), such as controls, background
+
+* The DICTIONARY
+
+  Each project should have a global "dictionary" that serves to map
+  project-internal nomenclature to nomenclature suitable for
+  scientific communication.
+
+  In its simplest form, a dictionary would consist of a table of
+  key-value pairs.  The key would be the project-internal term, and
+  the value would be an fully-specified referent suitable for use in
+  publications to refer unambiguously to the entity in question.  The
+  values (referents) of the keys may appear at most once in any
+  dictionary.  This means that no referent (value) can be referred to
+  by two different project-internal names (keys).
+
+  (It would facilitate quality control if restrictions are imposed on
+  the what is considered a valid key.  For example, the keys could be
+  restricted to the lower-case letters a-z, the digits 0-9, and the
+  underscore _.  In contrast, there would be few restrictions on what
+  could be considered a valid value.  They could include whitespace,
+  upper-case letters, punctuation, characters outside of the English
+  alphabet, etc.)
+
+  One possibly subtle/tricky issue is that the dictionary should not
+  only include entries for entities such as the names of cell lines,
+  and other reagents, but also for the names of the experimental
+  factors themselves.  IOW, a project's dictionary would not only
+  include pairs like, e.g.,
+
+    ifngamma: Interferon-γ
+    sirolimus: Rapamycin
+    
+
+
 
 
 Format for spreadsheets (csv, tsv, excel)
@@ -15,15 +49,16 @@ by a content section.
 * The n-th row of the header describes the n-th column of the content
   section.  For example:
 ` `
-    cell_line       string   factor        Name of the cell line
-    kinase          string   factor        Name of the measured kinase, with phosphosite
-    repgroup_id     integer  pseudofactor
-    scan_intensity  float    confounder    Scanning intensity
-    transfer_time   integer  confounder    Transfer time for the western blot
-    date            string   confounder    Date of the experiment
-    control_id      string   confounder    Control set identifier
-    background_id   string   confounder    Background set identifier
-    intensity       float    measurement   Signal intensity measured with the scanner
+    cell_line           string   factor        Name of the cell line
+    kinase              string   factor        Name of the measured kinase, with phosphosite
+    scan_intensity      float    confounder    Scanning intensity
+    transfer_time       integer  confounder    Transfer time for the western blot
+    date                string   confounder    Date of the experiment
+    control_id          string   confounder    Control set identifier
+    background_id       string   confounder    Background set identifier
+    replicate_group_id  string   confounder    
+    replicate_number    string   confounder    
+    intensity           float    measurement   Signal intensity measured with the scanner
 
 * As the example above shows, the rows of (the current version of) the
   header consist of four descriptors of the columns in the content
