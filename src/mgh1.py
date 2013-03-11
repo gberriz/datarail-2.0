@@ -17,6 +17,9 @@ if True:
 
     import re
 
+    # NOTE: for a reduced dataset, pass bl1 as the script's argument
+    DEFAULT_BASENAME = 'BreastLinesFirstBatch_MGHData_sent'
+
     def readsheet(path, sheet=0):
         wb = pd.ExcelFile(path)
         if type(sheet) is int:
@@ -127,11 +130,10 @@ if True:
     def tsv_path(name, _outputdir=outputdir):
         return op.join(_outputdir, u'%s.tsv' % name)
 
-    default_basename = 'BreastLinesFirstBatch_MGHData_sent'
-    # default_basename = 'bl1'
-    filename = '%s.xlsx' % (sys.argv[1] if len(sys.argv) > 1
-                            else default_basename)
-    del default_basename
+    args = sys.argv[1:]
+    nargs = len(args)
+    assert nargs < 2
+    filename = '%s.xlsx' % (args[0] if nargs == 1 else DEFAULT_BASENAME)
 
     print op.join(datadir, filename)
     print 'reading data...\t',; sys.stdout.flush()
@@ -215,27 +217,99 @@ if True:
     def dropna(df):
         return df.dropna(axis=1, thresh=len(df)//10).dropna(axis=0, how='all')
 
-    welldatamapped.rename(columns={u'compound_no': u'compound_number',
-                                   u'compound_conc': u'compound_concentration'},
-                          inplace=True)
+    # welldatamapped.rename(columns={u'compound_no': u'compound_number',
+    #                                u'compound_conc': u'compound_concentration'},
+    #                       inplace=True)
 
     platedata.time = platedata.protocol_name.apply(lambda s: s[-4])
     platedata.barcode = platedata.barcode.apply(unicode)
 
     platedata = keep(platedata, [u'barcode', u'time'], axis=1)
 
-    # data0 = welldatamapped.dropna(axis=1, how='all')
-    # data0 = data0.drop(u'none_5', axis=1)
     data0 = dropna(welldatamapped)
-    data0 = data0[data0[u'sample_code'] != 'BDR']
 
-    data0 = dropcols(data0, u'cell_id well_id modified created')
+    dict(cell_name='cell_line', compound_number='compound_name')
 
-    for c in 'compound_number sample_code column'.split():
+
+    data0.rename(columns=dict(cell_name=u'cell_line',
+                              compound_no=u'compound_name',
+                              compound_conc=u'compound_concentration'),
+                 inplace=True)
+
+    # data='0'
+    # discard='1'
+    # background='2'
+    # control='3'
+    # seeding='4'
+    sc2rc=dict(BDR=u'1', BL=u'2', CRL=u'3')
+    data0[u'rcat'] = data0.sample_code.apply(lambda sc: sc2rc.get(sc, u'0'))
+
+    def log10(s):
+        f = float(s)
+        return (u'-inf' if f == 0.0 else
+                unicode(round(ma.log10(f), 1)))
+    data0[u'compound_concentration_log10'] = data0.compound_concentration.apply(log10)
+
+    for cn in u'replicate_group_id control_id background_id seeding_id'.split():
+        data0[cn] = data0.apply(lambda x: u'')
+
+    data0 = data0.drop('cell_id well_id sample_code compound_concentration'
+                       .split(), axis=1)
+
+    data0 = \
+      data0.reindex_axis(
+        (u'rcat replicate_group_id control_id background_id seeding_id '
+         u'cell_line compound_name compound_concentration_log10 '
+         u'signal '
+         u'barcode row column modified created').split(), axis=1)
+
+    def repgroup(v=None,
+                 _keycols=(u'cell_line compound_name '
+                           u'compound_concentration_log10').split(),
+                 _memo=dict(),
+                 _reset=False):
+       if _reset: return _memo.clear()
+       return _memo.setdefault(tuple(v[_keycols]), len(_memo))
+
+    data0[u'replicate_group_id'] = data0.apply(repgroup, axis=1)
+
+# ------------------------------------------------------------
+
+if False:
+    for c in 'cell_id compound_number sample_code column'.split():
         data0[c] = data0[c].apply(maybe_to_int)
 
     for c in data0.columns.drop(['signal']):
         data0[c] = data0[c].apply(unicode)
+
+    def asdict(df, argcols, valcols):
+        collect = dict()
+        for i, s in data0.iterrows():
+            (collect.setdefault(tuple(s[[argcols]]), set())
+             .add(tuple(s[[valcols]])))
+        return collect
+
+    def isfxn(dct):
+        t0 = tuple(set([type(v) for v in dct.values()]))
+        assert len(t0) == 1 and t0[0] == set
+        for v in dct.values():
+            if len(v) > 1:
+                return False
+        return True
+
+    # def isbxn(dct):
+    #     if isfxn(dct):
+
+    def asfxn(dct):
+        assert isfxn(dct)
+        return dict([(k, tuple(v)[0]) for k, v in dct.items()])
+
+
+if False:
+
+    data0 = data0[data0[u'sample_code'] != 'BDR']
+
+    data0 = dropcols(data0, u'cell_id well_id modified created')
 
     data = pd.merge(data0, platedata, on='barcode')
 
@@ -314,6 +388,8 @@ if True:
     #                       lambda c: (u'2' if controls.ix[c][u'column'] == '2'
     #                                  else '12,13')])
     #             .mean().unstack().reset_index())
+
+if False:
 
     glob = globals()
     for name in (u'data data0 data1 platedata controls1 background '
