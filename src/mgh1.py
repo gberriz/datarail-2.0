@@ -236,13 +236,14 @@ if True:
                               compound_conc=u'compound_concentration'),
                  inplace=True)
 
-    # data='0'
-    # discard='1'
-    # background='2'
-    # control='3'
-    # seeding='4'
-    sc2rc=dict(BDR=u'1', BL=u'2', CRL=u'3')
-    data0[u'rcat'] = data0.sample_code.apply(lambda sc: sc2rc.get(sc, u'0'))
+    DATA = u'0'
+    DISCARD = u'1'
+    BACKGROUND = u'2'
+    CONTROL = u'3'
+    SEEDING = u'4'
+
+    sc2rc=dict(BDR=DISCARD, BL=BACKGROUND, CRL=CONTROL)
+    data0[u'rcat'] = data0.sample_code.apply(lambda sc: sc2rc.get(sc, DATA))
 
     def log10(s):
         f = float(s)
@@ -251,27 +252,47 @@ if True:
     data0[u'compound_concentration_log10'] = data0.compound_concentration.apply(log10)
 
     for cn in u'replicate_group_id control_id background_id seeding_id'.split():
-        data0[cn] = data0.apply(lambda x: u'')
+        data0[cn] = data0.apply(lambda x: u'', axis=1)
 
     data0 = data0.drop('cell_id well_id sample_code compound_concentration'
                        .split(), axis=1)
 
     data0 = \
       data0.reindex_axis(
-        (u'rcat replicate_group_id control_id background_id seeding_id '
+        (u'rcat replicate_group_id background_id control_id seeding_id '
          u'cell_line compound_name compound_concentration_log10 '
          u'signal '
          u'barcode row column modified created').split(), axis=1)
 
+
+if False:
     def repgroup(v=None,
                  _keycols=(u'cell_line compound_name '
                            u'compound_concentration_log10').split(),
                  _memo=dict(),
                  _reset=False):
        if _reset: return _memo.clear()
-       return _memo.setdefault(tuple(v[_keycols]), len(_memo))
+       return _memo.setdefault(tuple(v[_keycols]), unicode(len(_memo)))
+
+    def groupid_updater(key, col, rcat):
+        memo=dict()
+        def groupid(v=None, _reset=False):
+            if _reset: return memo.clear()
+            rc = v['rcat']
+            return (memo.setdefault(v[key], unicode(len(memo)))
+                    if (rc == DATA or rc == rcat) else v[col])
+
+        return groupid
+
+    bggroup = groupid_updater('barcode', 'background_id', BACKGROUND)
+    ctrlgroup = groupid_updater('barcode', 'control_id', CONTROL)
+    sdnggroup = groupid_updater('cell_line', 'seeding_id', SEEDING)
 
     data0[u'replicate_group_id'] = data0.apply(repgroup, axis=1)
+    data0[u'background_id'] = data0.apply(bggroup, axis=1)
+    data0[u'control_id'] = data0.apply(ctrlgroup, axis=1)
+    data0[u'seeding_id'] = data0.apply(sdnggroup, axis=1)
+
 
 # ------------------------------------------------------------
 
