@@ -264,8 +264,6 @@ if True:
          u'signal '
          u'barcode row column modified created').split(), axis=1)
 
-
-if False:
     def repgroup(v=None,
                  _keycols=(u'cell_line compound_name '
                            u'compound_concentration_log10').split(),
