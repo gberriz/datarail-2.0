@@ -187,8 +187,6 @@ if True:
                        inplace=True)
     del fixre
 
-    sd1 = calibration.set_index(calibration.columns[0])
-
     calibration.set_index(calibration.columns[0], inplace=True)
     calibration = pd.DataFrame(calibration.stack()
                                .swaplevel(0, 1)
