@@ -14,6 +14,7 @@ if True:
     import numpy as np
     import math as ma
     import sys
+    import datetime as dt
 
     import re
 
@@ -139,6 +140,50 @@ if True:
     print 'reading data...\t',; sys.stdout.flush()
     workbook = pd.ExcelFile(str(op.join(datadir, filename)))
 
+
+    def asdict(df, argcols, valcols):
+        collect = dict()
+        for i, s in df.iterrows():
+            (collect.setdefault(tuple(s[[argcols]]), set())
+             .add(tuple(s[[valcols]])))
+        return collect
+
+    def isfxn(dct):
+        t0 = tuple(set([type(v) for v in dct.values()]))
+        assert len(t0) == 1 and t0[0] == set
+        for v in dct.values():
+            if len(v) > 1:
+                return False
+        return True
+
+    # def isbxn(dct):
+    #     if isfxn(dct):
+
+    def asfxn(dct):
+        assert isfxn(dct)
+        return dict([(k, tuple(v)[0]) for k, v in dct.items()])
+
+
+    def fix_barcode(b):
+        try:
+            d = dt.datetime.strptime(b, u'%Y-%m-%d %I:%M:%S %p')
+        except (ValueError, TypeError), e:
+            msg = str(e)
+            if ('does not match format' not in msg and
+                'must be string, not datetime.datetime' not in msg):
+                raise
+            d = b
+
+        try:
+            b = dt.datetime.strftime(d, u'%Y%m%dT%H%M%S')
+        except TypeError, e:
+            if ("descriptor 'strftime' requires a 'datetime.date' object "
+                "but received a 'unicode'" not in str(e)):
+                raise
+
+        return b
+
+
     welldatamapped = workbook.parse(u'WellDataMapped')
     platedata = workbook.parse(u'PlateData')
     calibration = workbook.parse(u'RefSeedSignal', header=1, skiprows=[0],
@@ -161,14 +206,14 @@ if True:
     hmssfx_re = re.compile(ur'_HMS$')
     seeded.cell_name = seeded.cell_name.apply(lambda s: hmssfx_re.sub('', s))
 
-    import datetime as dt
-    def fix_barcode(b):
-        try:
-            return unicode(dt.datetime.strptime(b, u'%Y-%m-%d %I:%M:%S %p'))
-        except ValueError, e:
-            if 'does not match format' not in str(e):
-                raise
-            return b
+    # import datetime as dt
+    # def fix_barcode(b):
+    #     try:
+    #         return unicode(dt.datetime.strptime(b, u'%Y-%m-%d %I:%M:%S %p'))
+    #     except ValueError, e:
+    #         if 'does not match format' not in str(e):
+    #             raise
+    #         return b
 
     # fix_barcode = dict([(b, b) for b in seeded.barcode])
     # fix_barcode.update(((u'2012-10-24 5:46:33 PM', u'2012-10-24 17:46:33'),
@@ -189,15 +234,13 @@ if True:
                        inplace=True)
     del fixre
 
-    sd1 = calibration.set_index(calibration.columns[0])
-
     calibration.set_index(calibration.columns[0], inplace=True)
     calibration = pd.DataFrame(calibration.stack()
                                .swaplevel(0, 1)
                                .sortlevel(), columns=[u'signal'])
     calibration.index.names[0] = u'cell_name'
 
-    def reg(df, index=pd.Index(('coeff', 'intercept'))):
+    def reg(df, index=pd.Index(('coefficient', 'intercept'))):
         xcol = 'seed_cell_number_ml'
         ycol = 'signal'
         sdf = df.sort(columns=[xcol], axis=0)
@@ -211,8 +254,8 @@ if True:
 
     seeded = pd.merge(seeded, coeff, on='cell_name', how='outer')
 
-    seeded['estimated_seeding_signal'] = np.round(seeded.intercept +
-        seeded.seeding_density_cells_ml * seeded.coeff)
+    seeded['estimated_seeding_signal'] = \
+        np.round(seeded.intercept + seeded.seeding_density_cells_ml * seeded.coeff)
 
     def dropna(df):
         return df.dropna(axis=1, thresh=len(df)//10).dropna(axis=0, how='all')
@@ -221,18 +264,27 @@ if True:
     #                                u'compound_conc': u'compound_concentration'},
     #                       inplace=True)
 
-    platedata.time = platedata.protocol_name.apply(lambda s: s[-4])
-    platedata.barcode = platedata.barcode.apply(unicode)
 
-    platedata = keep(platedata, [u'barcode', u'time'], axis=1)
+    # PANDAS BUG: the following fails silently (no 'time' column is created):
+    #
+    # platedata.time = platedata.protocol_name.apply(lambda s: s[-4])
+
+    platedata['time'] = platedata.protocol_name.apply(lambda s: s[-4])
+
+    platedata.barcode = platedata.barcode.apply(fix_barcode)
+
+    platedata = keep(platedata,
+                     u'barcode time qcscore pass_fail manual_flag'.split(),
+                     axis=1)
+
+    for c in 'qcscore pass_fail manual_flag'.split():
+        platedata[c] = platedata[c].apply(maybe_to_int)
+
 
     data0 = dropna(welldatamapped)
 
-    dict(cell_name='cell_line', compound_number='compound_name')
-
-
     data0.rename(columns=dict(cell_name=u'cell_line',
-                              compound_no=u'compound_name',
+                              compound_no=u'compound_number',
                               compound_conc=u'compound_concentration'),
                  inplace=True)
 
@@ -251,22 +303,52 @@ if True:
                 unicode(round(ma.log10(f), 1)))
     data0[u'compound_concentration_log10'] = data0.compound_concentration.apply(log10)
 
-    for cn in u'replicate_group_id control_id background_id seeding_id'.split():
+    # for cn in u'replicate_group_id control_id background_id seeding_id'.split():
+    #     data0[cn] = data0.apply(lambda x: u'', axis=1)
+
+    for cn in u'replicate_group_id control_id background_id'.split():
         data0[cn] = data0.apply(lambda x: u'', axis=1)
 
     data0 = data0.drop('cell_id well_id sample_code compound_concentration'
                        .split(), axis=1)
 
+    # data0 = \
+    #   data0.reindex_axis(
+    #     (u'rcat replicate_group_id background_id control_id seeding_id '
+    #      u'cell_line compound_number compound_concentration_log10 '
+    #      u'signal '
+    #      u'barcode row column modified created').split(), axis=1)
+
+
+    # data0 = pd.merge(data0,
+    #                  keep(seeded,
+    #                       u'barcode estimated_seeding_signal'.split(),
+    #                       axis=1),
+    #                  on=u'barcode', how='left')
+
+
+    data0.barcode = data0.barcode.apply(fix_barcode)
+    data0 = pd.merge(data0, dropcols(seeded, ['cell_name']),
+                     on=u'barcode', how='left')
+
+    data0 = pd.merge(data0, platedata, on=u'barcode', how='left')
+
     data0 = \
       data0.reindex_axis(
-        (u'rcat replicate_group_id background_id control_id seeding_id '
-         u'cell_line compound_name compound_concentration_log10 '
+        (u'rcat replicate_group_id background_id control_id '
+         u'cell_line compound_number compound_concentration_log10 time '
          u'signal '
-         u'barcode row column modified created').split(), axis=1)
+         u'barcode seeding_density_cells_ml coefficient intercept '
+         u'estimated_seeding_signal row column modified created '
+         u'qcscore pass_fail manual_flag'.split()),
+        axis=1)
+
+    for c in 'compound_number column'.split():
+        data0[c] = data0[c].apply(maybe_to_int)
 
     def repgroup(v=None,
-                 _keycols=(u'cell_line compound_name '
-                           u'compound_concentration_log10').split(),
+                 _keycols=(u'rcat cell_line compound_number '
+                           u'compound_concentration_log10 time').split(),
                  _memo=dict(),
                  _reset=False):
        if _reset: return _memo.clear()
@@ -284,13 +366,16 @@ if True:
 
     bggroup = groupid_updater('barcode', 'background_id', BACKGROUND)
     ctrlgroup = groupid_updater('barcode', 'control_id', CONTROL)
-    sdnggroup = groupid_updater('cell_line', 'seeding_id', SEEDING)
+    # sdnggroup = groupid_updater('cell_line', 'seeding_id', SEEDING)
 
     data0[u'replicate_group_id'] = data0.apply(repgroup, axis=1)
     data0[u'background_id'] = data0.apply(bggroup, axis=1)
     data0[u'control_id'] = data0.apply(ctrlgroup, axis=1)
-    data0[u'seeding_id'] = data0.apply(sdnggroup, axis=1)
+    # data0[u'seeding_id'] = data0.apply(sdnggroup, axis=1)
 
+    # data0[u'estimated_seeding_signal'] = ???
+
+    data0.to_csv(tsv_path('dataset'), '\t', index=False, float_format='%.1f')
 
 # ------------------------------------------------------------
 
@@ -300,29 +385,6 @@ if False:
 
     for c in data0.columns.drop(['signal']):
         data0[c] = data0[c].apply(unicode)
-
-    def asdict(df, argcols, valcols):
-        collect = dict()
-        for i, s in data0.iterrows():
-            (collect.setdefault(tuple(s[[argcols]]), set())
-             .add(tuple(s[[valcols]])))
-        return collect
-
-    def isfxn(dct):
-        t0 = tuple(set([type(v) for v in dct.values()]))
-        assert len(t0) == 1 and t0[0] == set
-        for v in dct.values():
-            if len(v) > 1:
-                return False
-        return True
-
-    # def isbxn(dct):
-    #     if isfxn(dct):
-
-    def asfxn(dct):
-        assert isfxn(dct)
-        return dict([(k, tuple(v)[0]) for k, v in dct.items()])
-
 
 if False:
 
