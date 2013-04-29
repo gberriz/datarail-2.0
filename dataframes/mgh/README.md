@@ -9,6 +9,19 @@
   2012-10-24 5:46:33 PM  
   2012-10-31 3:20:16 PM
 
+** Until we have their "true" values, these barcodes will be
+   normalized to the standard ISO 8601 local time format
+   yyyymmddTHHMMSS; hence
+
+  2012-10-24 17:46:33, 2012-10-24 5:46:33 PM -> 20121024T174633  
+  2012-10-31 15:20:16, 2012-10-31 3:20:16 PM -> 20121031T152016
+
+** The row in the PlateData sheet having barcode 20121024T174633 also
+   includes this in the notifications column:
+
+    NWARNING: Plate height defined in the plate editor does not match the actual plate height. Measured height is 0.00 mm. Plate editor height is 14.83 mm. The results may be affected.|WARNING: Instrument changed the measurement height from 6.5 mm to 14.05 mm  as measurement head can't reach the given height.|WARNING: Instrument changed the measurement height from 14.05 mm to 13.85 mm  as measurement head can't reach the given height.|
+
+
 * Two different names used for (presumably) same cell line:
 
   MCF10DCIS.COM  
@@ -18,6 +31,9 @@
 
   HCC-1500
   ZR-75-30
+
+** Consequently, the estimated_seeding_signal corresponding to these
+   cell lines is NaN
 
 * The concentrations should be given as the string representation of
   their log10 ('1.0', '0.5', '0.0', '-0.5', ... or '-Inf'); most of
@@ -33,6 +49,37 @@
 
 * SeededNumbers uses 'CellLine' whereas other sheets
   (e.g. WellDataMapped) use 'Cell Name'.
+
+* The following are the value counts for some columns of interest in
+  the PlateData sheet:
+
+  qcscore
+  -------
+  0        240
+  10000     90
+  11000      1
+  10100      1
+
+  pass_fail
+  ---------
+  1      240
+  nan     92
+
+  manual_flag
+  -----------
+  0       282
+  X        44
+  x         4
+  #N/A      2
+
+
+** Note that column manual_flag ('Manual Flag') of the sheet PlateData
+   contains values that differ only in case (namely, 'x' and 'X');
+   should they be regarded as equivalent?
+
+** We need definitions for the values in the pass_fail and manual_flag
+   columns (or, better yet, we need to replace the current values with
+   ones having obvious meanings).
 
 ---
 
