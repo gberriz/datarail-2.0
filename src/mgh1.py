@@ -1,10 +1,11 @@
 if True:
+
     import warnings as wrn
     import exceptions as exc
     wrn.filterwarnings(u'ignore',
-                       message=r'.*with\s+inplace=True\s+will\s+return\s+None',
+                       message=ur'.*with\s+inplace=True\s+will\s+return\s+None',
                        category=exc.FutureWarning,
-                       module=r'pandas')
+                       module=u'pandas')
 
     import os.path as op
     import pandas as pd
@@ -18,101 +19,73 @@ if True:
 
     import re
 
+    DATA = u'0'
+    DISCARD = u'1'
+    BACKGROUND = u'2'
+    CONTROL = u'3'
+    SEEDING = u'4'
+
+    BASEDIR = op.abspath(op.join(op.dirname(__file__), u'..'))
+
     # NOTE: for a reduced dataset, pass bl1 as the script's argument
-    DEFAULT_BASENAME = 'BreastLinesFirstBatch_MGHData_sent'
+    DEFAULT_BASENAME = u'BreastLinesFirstBatch_MGHData_sent'
 
-    def readsheet(path, sheet=0):
-        wb = pd.ExcelFile(path)
-        if type(sheet) is int:
-            return wb.parse(wb.sheet_names[sheet])
-        else:
-            return wb.parse(sheet)
+    def dropcols(df, colnames):
+        return df.drop(colnames.split()
+                       if hasattr(colnames, 'split')
+                       else colnames, axis=1)
 
-    def _normalize_label(label,
-                         _cleanup_re=re.compile(ur'\W+|(?<=[^\WA-Z_])'
-                                                ur'(?=[A-Z])')):
-        return (u'none_0' if label is None
-                else _cleanup_re.sub(u'_', unicode(label).strip()).lower())
+    def dropna(df):
+        return df.dropna(axis=1, thresh=len(df)//10).dropna(axis=0, how='all')
 
-    class FloatLabel(unicode):
-        _HEX_RE = re.compile(ur'^0x[a-f0-9]\.[a-f0-9]{13}p[-+](?:0|[1-9]\d*)$')
-        def __new__(cls, flt):
-            if isinstance(flt, FloatLabel):
-                h = flt._hex
-            else:
-                try:
-                    if (FloatLabel._HEX_RE.search(flt) and
-                        float.fromhex(flt) != None):
-                        h = flt
-                    else:
-                        raise '(goto except clause)'
-                except:
-                    h = float(flt).hex()
-            return super(FloatLabel, cls).__new__(cls, h)
+    def fix_barcode(b):
+        try:
+            d = dt.datetime.strptime(b, u'%Y-%m-%d %I:%M:%S %p')
+        except (ValueError, TypeError), e:
+            msg = unicode(e)
+            if (u'does not match format' not in msg and
+                u'must be string, not datetime.datetime' not in msg):
+                raise
+            d = b
 
-        @property
-        def value(self):
-            return float(self)
+        try:
+            b = dt.datetime.strftime(d, u'%Y%m%dT%H%M%S')
+        except TypeError, e:
+            if (u"descriptor 'strftime' requires a 'datetime.date' object "
+                u"but received a 'unicode'" not in unicode(e)):
+                raise
 
-        @property
-        def _hex(self):
-            # guaranteed to always be displayed as the hex
-            # representation, irrespective of context
-            return float(self).hex()
+        return b
 
-        def __unicode__(self):
-            # return u"'%f'" % float(self)
-            return u"%f" % float(self)
+    def get_datapath(basedir=BASEDIR):
+        datadir = op.join(basedir, u'data')
 
-        def __repr__(self):
-            return "%r" % float(self)
+        args = sys.argv[1:]
+        nargs = len(args)
+        assert nargs < 2
+        filename = '%s.xlsx' % (args[0] if nargs == 1 else DEFAULT_BASENAME)
+        return op.join(datadir, filename)
 
-        def __str__(self):
-            return self
+    def groupid_updater(key, col, rcat):
+        memo=dict()
+        def groupid(v=None, _reset=False):
+            if _reset: return memo.clear()
+            rc = v[u'rcat']
+            return (memo.setdefault(v[key], unicode(len(memo)))
+                    if (rc == DATA or rc == rcat) else v[col])
 
-        def __float__(self):
-            return float.fromhex(self)
-
-    # automate definition of comparison methods for FloatLabel class
-    def _setfunc(cls, name):
-        ffunc = getattr(float, name)
-        def func(s, o):
-            try:
-                return ffunc(float(s), float(cls(o)))
-            except ValueError:
-                return NotImplemented
-        func.__name__ = name
-        func.__doc__ = ffunc.__doc__
-        setattr(cls, name, func)
-
-    for _name in ('__%s__' % s for s in 'eq ne ge gt le lt'.split()):
-        _setfunc(FloatLabel, _name)
-
-    del _name, _setfunc
-
-
+        return groupid
 
     def keep(df, labels, axis=0, level=None):
-        drop = list(set(df.columns).difference(set(labels)))
+        drop = list(set(df.columns).difference(set(labels.split()
+                                                   if hasattr(labels, 'split')
+                                                   else labels)))
         return df.drop(drop, axis=axis, level=level)
 
-    class Replicates(pd.Series):
-        def __new__(cls, data, keycolumns=None, base=1):
-            reps = dict()
-            ret = []
-            idx = data.index
-            if keycolumns is not None:
-                data = keep(data, keycolumns, axis=1)
-            start = base - 1
-            for t in [tuple(v) for v in data.values]:
-                r = reps[t] = reps.get(t, start) + 1
-                ret.append(unicode(r))
-            self = super(Replicates, cls).__new__(cls, ret, index=idx)
-            self.__class__ = cls
-            return self
-
-        def __init__(self, data, keycolumns=None, base=1):
-            super(Replicates, self).__init__(self)
+    def log10(s):
+        f = float(s)
+        return (u'-inf' if f == 0.0 else
+                unicode(round(ma.log10(f), 1)))
 
     def maybe_to_int(x):
         try:
@@ -124,215 +97,156 @@ if True:
             i = x
         return unicode(i)
 
-    basedir = op.abspath(op.join(op.dirname(__file__), u'..'))
+    def normalize_label(label,
+                        _cleanup_re=re.compile(ur'\W+|(?<=[^\WA-Z_])'
+                                               ur'(?=[A-Z])')):
+        return (u'none_0' if label is None
+                else _cleanup_re.sub(u'_', unicode(label).strip()).lower())
 
-    datadir = op.join(basedir, u'data')
-    outputdir = op.join(basedir, u'dataframes/mgh')
-    def tsv_path(name, _outputdir=outputdir):
-        return op.join(_outputdir, u'%s.tsv' % name)
-
-    args = sys.argv[1:]
-    nargs = len(args)
-    assert nargs < 2
-    filename = '%s.xlsx' % (args[0] if nargs == 1 else DEFAULT_BASENAME)
-
-    print op.join(datadir, filename)
-    print 'reading data...\t',; sys.stdout.flush()
-    workbook = pd.ExcelFile(str(op.join(datadir, filename)))
-
-
-    def asdict(df, argcols, valcols):
-        collect = dict()
-        for i, s in df.iterrows():
-            (collect.setdefault(tuple(s[[argcols]]), set())
-             .add(tuple(s[[valcols]])))
-        return collect
-
-    def isfxn(dct):
-        t0 = tuple(set([type(v) for v in dct.values()]))
-        assert len(t0) == 1 and t0[0] == set
-        for v in dct.values():
-            if len(v) > 1:
-                return False
-        return True
-
-    # def isbxn(dct):
-    #     if isfxn(dct):
-
-    def asfxn(dct):
-        assert isfxn(dct)
-        return dict([(k, tuple(v)[0]) for k, v in dct.items()])
-
-
-    def fix_barcode(b):
-        try:
-            d = dt.datetime.strptime(b, u'%Y-%m-%d %I:%M:%S %p')
-        except (ValueError, TypeError), e:
-            msg = str(e)
-            if ('does not match format' not in msg and
-                'must be string, not datetime.datetime' not in msg):
-                raise
-            d = b
-
-        try:
-            b = dt.datetime.strftime(d, u'%Y%m%dT%H%M%S')
-        except TypeError, e:
-            if ("descriptor 'strftime' requires a 'datetime.date' object "
-                "but received a 'unicode'" not in str(e)):
-                raise
-
-        return b
-
-
-    welldatamapped = workbook.parse(u'WellDataMapped')
-    platedata = workbook.parse(u'PlateData')
-    calibration = workbook.parse(u'RefSeedSignal', header=1, skiprows=[0],
-                                 skip_footer=7)
-    seeded = workbook.parse(u'SeededNumbers')
-
-    # del workbook
-    print 'done'
-
-    for df in (welldatamapped, platedata, seeded):
-        df.rename(columns=_normalize_label, inplace=True)
-
-    def dropcols(df, colnames):
-        return df.drop(colnames.split()
-                       if hasattr(colnames, 'split')
-                       else colnames, axis=1)
-
-    seeded = dropcols(seeded, 'read_date cell_id')
-    seeded.rename(columns={'cell_line':'cell_name'}, inplace=True)
-    hmssfx_re = re.compile(ur'_HMS$')
-    seeded.cell_name = seeded.cell_name.apply(lambda s: hmssfx_re.sub('', s))
-
-    # import datetime as dt
-    # def fix_barcode(b):
-    #     try:
-    #         return unicode(dt.datetime.strptime(b, u'%Y-%m-%d %I:%M:%S %p'))
-    #     except ValueError, e:
-    #         if 'does not match format' not in str(e):
-    #             raise
-    #         return b
-
-    # fix_barcode = dict([(b, b) for b in seeded.barcode])
-    # fix_barcode.update(((u'2012-10-24 5:46:33 PM', u'2012-10-24 17:46:33'),
-    #                     (u'2012-10-31 3:20:16 PM', u'2012-10-31 15:20:16')))
-    # seeded.barcode = [fix_barcode[b] for b in seeded.barcode]
-    seeded.barcode = seeded.barcode.apply(fix_barcode)
-
-    # def fix_barcode(b):
-    #     if b == u'2012-10-24 5:46:33 PM': return u'2012-10-24 17:46:33'
-    #     if b == u'2012-10-31 3:20:16 PM': return u'2012-10-31 15:20:16'
-    #     return b
-
-    calibration.rename(columns={calibration.columns[0]:
-                                    _normalize_label(calibration.columns[0])},
-                       inplace=True)
-    fixre=re.compile(ur'^MCFDCIS\.COM$')
-    calibration.rename(columns=lambda l: fixre.sub(u'MCF10DCIS.COM', l),
-                       inplace=True)
-    del fixre
-
-    calibration.set_index(calibration.columns[0], inplace=True)
-    calibration = pd.DataFrame(calibration.stack()
-                               .swaplevel(0, 1)
-                               .sortlevel(), columns=[u'signal'])
-    calibration.index.names[0] = u'cell_name'
-
-    def reg(df, index=pd.Index(('coefficient', 'intercept'))):
-        xcol = 'seed_cell_number_ml'
-        ycol = 'signal'
+    def regress(df, index=pd.Index((u'coefficient', u'intercept'))):
+        xcol = u'seed_cell_number_ml'
+        ycol = u'signal'
         sdf = df.sort(columns=[xcol], axis=0)
         ls = pd.ols(x=sdf[xcol][2:], y=sdf[ycol][2:])
         ret = ls.beta
         ret.index = index
         return ret
 
-    coeff = (calibration.reset_index().groupby('cell_name').apply(reg)
+    def repgroup(v=None,
+                 _keycols=(u'rcat cell_line compound_number '
+                           u'compound_concentration_log10 time').split(),
+                 _memo=dict(),
+                 _reset=False):
+       if _reset: return _memo.clear()
+       return _memo.setdefault(tuple(v[_keycols]), unicode(len(_memo)))
+
+    def tsv_path(name, _outputdir=op.join(BASEDIR, u'dataframes/mgh')):
+        return op.join(_outputdir, u'%s.tsv' % name)
+
+# ---------------------------------------------------------------------------
+
+    # READING IN THE DATA FROM DISK
+    datapath = get_datapath()
+    print u'reading data from %s...\t' % datapath,; sys.stdout.flush()
+    workbook = pd.ExcelFile(str(datapath))
+    del datapath
+
+    welldatamapped = workbook.parse(u'WellDataMapped')
+
+    platedata = workbook.parse(u'PlateData')
+    calibration = workbook.parse(u'RefSeedSignal', header=1, skiprows=[0],
+                                 skip_footer=7)
+    seeded = workbook.parse(u'SeededNumbers')
+    # del workbook
+
+    print u'done'
+
+# ---------------------------------------------------------------------------
+
+    # CLEANUP CALIBRATION DF
+    calibration.rename(columns={calibration.columns[0]:
+                                    normalize_label(calibration.columns[0])},
+                       inplace=True)
+    fixre=re.compile(ur'^MCFDCIS\.COM$')
+    calibration.rename(columns=lambda l: fixre.sub(u'MCF10DCIS.COM', l),
+                       inplace=True)
+    del fixre
+
+# ---------------------------------------------------------------------------
+
+    # RESTRUCTURE CALIBRATION DF
+    calibration.set_index(calibration.columns[0], inplace=True)
+    calibration = pd.DataFrame(calibration.stack()
+                               .swaplevel(0, 1)
+                               .sortlevel(), columns=[u'signal'])
+    calibration.index.names[0] = u'cell_name'
+
+# ---------------------------------------------------------------------------
+
+    # CLEANUP SEEDED DF
+    seeded.rename(columns=normalize_label, inplace=True)
+    seeded.rename(columns={u'cell_line': u'cell_name'}, inplace=True)
+    seeded = dropcols(seeded, u'read_date cell_id')
+    seeded.barcode = seeded.barcode.apply(fix_barcode)
+
+    hmssfx_re = re.compile(ur'_HMS$')
+    seeded.cell_name = seeded.cell_name.apply(lambda s: hmssfx_re.sub(u'', s))
+    del hmssfx_re
+
+# ---------------------------------------------------------------------------
+
+    # UPDATE SEEDED DF WITH INFO FROM CALIBRATION DF
+    coeff = (calibration.reset_index().groupby(u'cell_name').apply(regress)
              .reset_index())
+    seeded = pd.merge(seeded, coeff, on=u'cell_name', how='outer')
+    del coeff
+    del calibration
 
-    seeded = pd.merge(seeded, coeff, on='cell_name', how='outer')
+    seeded[u'estimated_seeding_signal'] = \
+        np.round(seeded.intercept +
+                 seeded.seeding_density_cells_ml * seeded.coefficient)
 
-    seeded['estimated_seeding_signal'] = \
-        np.round(seeded.intercept + seeded.seeding_density_cells_ml * seeded.coeff)
+    seeded = dropcols(seeded, [u'cell_name'])
 
-    def dropna(df):
-        return df.dropna(axis=1, thresh=len(df)//10).dropna(axis=0, how='all')
+# ---------------------------------------------------------------------------
 
-    # welldatamapped.rename(columns={u'compound_no': u'compound_number',
-    #                                u'compound_conc': u'compound_concentration'},
-    #                       inplace=True)
-
+    # CLEANUP PLATEDATA
+    platedata.rename(columns=normalize_label, inplace=True)
 
     # PANDAS BUG: the following fails silently (no 'time' column is created):
-    #
     # platedata.time = platedata.protocol_name.apply(lambda s: s[-4])
 
-    platedata['time'] = platedata.protocol_name.apply(lambda s: s[-4])
-
+    platedata[u'time'] = platedata.protocol_name.apply(lambda s: s[-4])
     platedata.barcode = platedata.barcode.apply(fix_barcode)
 
     platedata = keep(platedata,
-                     u'barcode time qcscore pass_fail manual_flag'.split(),
+                     u'barcode time qcscore pass_fail manual_flag',
                      axis=1)
 
-    for c in 'qcscore pass_fail manual_flag'.split():
+    for c in u'qcscore pass_fail manual_flag'.split():
         platedata[c] = platedata[c].apply(maybe_to_int)
 
+# ---------------------------------------------------------------------------
+
+    # CLEANUP WELLDATAMAPPED
+    welldatamapped.rename(columns=normalize_label, inplace=True)
 
     data0 = dropna(welldatamapped)
-
     data0.rename(columns=dict(cell_name=u'cell_line',
                               compound_no=u'compound_number',
                               compound_conc=u'compound_concentration'),
                  inplace=True)
 
-    DATA = u'0'
-    DISCARD = u'1'
-    BACKGROUND = u'2'
-    CONTROL = u'3'
-    SEEDING = u'4'
-
-    sc2rc=dict(BDR=DISCARD, BL=BACKGROUND, CRL=CONTROL)
+    sc2rc = dict(BDR=DISCARD, BL=BACKGROUND, CRL=CONTROL)
     data0[u'rcat'] = data0.sample_code.apply(lambda sc: sc2rc.get(sc, DATA))
 
-    def log10(s):
-        f = float(s)
-        return (u'-inf' if f == 0.0 else
-                unicode(round(ma.log10(f), 1)))
-    data0[u'compound_concentration_log10'] = data0.compound_concentration.apply(log10)
+    data0[u'compound_concentration_log10'] = \
+        data0.compound_concentration.apply(log10)
 
-    # for cn in u'replicate_group_id control_id background_id seeding_id'.split():
-    #     data0[cn] = data0.apply(lambda x: u'', axis=1)
+    for c in u'compound_number column'.split():
+        data0[c] = data0[c].apply(maybe_to_int)
 
     for cn in u'replicate_group_id control_id background_id'.split():
         data0[cn] = data0.apply(lambda x: u'', axis=1)
 
-    data0 = data0.drop('cell_id well_id sample_code compound_concentration'
-                       .split(), axis=1)
 
-    # data0 = \
-    #   data0.reindex_axis(
-    #     (u'rcat replicate_group_id background_id control_id seeding_id '
-    #      u'cell_line compound_number compound_concentration_log10 '
-    #      u'signal '
-    #      u'barcode row column modified created').split(), axis=1)
-
-
-    # data0 = pd.merge(data0,
-    #                  keep(seeded,
-    #                       u'barcode estimated_seeding_signal'.split(),
-    #                       axis=1),
-    #                  on=u'barcode', how='left')
-
+    data0 = dropcols(data0, (u'cell_id well_id sample_code '
+                             u'compound_concentration'))
 
     data0.barcode = data0.barcode.apply(fix_barcode)
-    data0 = pd.merge(data0, dropcols(seeded, ['cell_name']),
-                     on=u'barcode', how='left')
+
+# ---------------------------------------------------------------------------
+
+    # UPDATE DATA0 DF WITH INFO FROM SEEDED AND PLATEDATA DFS
+    data0 = pd.merge(data0, seeded, on=u'barcode', how='left')
+    del seeded
 
     data0 = pd.merge(data0, platedata, on=u'barcode', how='left')
+    del platedata
 
+# ---------------------------------------------------------------------------
+
+    # REORDER COLUMNS OF DATA0 DF
     data0 = \
       data0.reindex_axis(
         (u'rcat replicate_group_id background_id control_id '
@@ -343,334 +257,18 @@ if True:
          u'qcscore pass_fail manual_flag'.split()),
         axis=1)
 
-    for c in 'compound_number column'.split():
-        data0[c] = data0[c].apply(maybe_to_int)
+# ---------------------------------------------------------------------------
 
-    def repgroup(v=None,
-                 _keycols=(u'rcat cell_line compound_number '
-                           u'compound_concentration_log10 time').split(),
-                 _memo=dict(),
-                 _reset=False):
-       if _reset: return _memo.clear()
-       return _memo.setdefault(tuple(v[_keycols]), unicode(len(_memo)))
-
-    def groupid_updater(key, col, rcat):
-        memo=dict()
-        def groupid(v=None, _reset=False):
-            if _reset: return memo.clear()
-            rc = v['rcat']
-            return (memo.setdefault(v[key], unicode(len(memo)))
-                    if (rc == DATA or rc == rcat) else v[col])
-
-        return groupid
-
-    bggroup = groupid_updater('barcode', 'background_id', BACKGROUND)
-    ctrlgroup = groupid_updater('barcode', 'control_id', CONTROL)
-    # sdnggroup = groupid_updater('cell_line', 'seeding_id', SEEDING)
-
+    # ADD IDS TO DATA0 DF
     data0[u'replicate_group_id'] = data0.apply(repgroup, axis=1)
+
+    bggroup = groupid_updater(u'barcode', u'background_id', BACKGROUND)
     data0[u'background_id'] = data0.apply(bggroup, axis=1)
+
+    ctrlgroup = groupid_updater(u'barcode', u'control_id', CONTROL)
     data0[u'control_id'] = data0.apply(ctrlgroup, axis=1)
-    # data0[u'seeding_id'] = data0.apply(sdnggroup, axis=1)
-
-    # data0[u'estimated_seeding_signal'] = ???
-
-    data0.to_csv(tsv_path('dataset'), '\t', index=False, float_format='%.1f')
 
 # ------------------------------------------------------------
 
-if False:
-    for c in 'cell_id compound_number sample_code column'.split():
-        data0[c] = data0[c].apply(maybe_to_int)
-
-    for c in data0.columns.drop(['signal']):
-        data0[c] = data0[c].apply(unicode)
-
-if False:
-
-    data0 = data0[data0[u'sample_code'] != 'BDR']
-
-    data0 = dropcols(data0, u'cell_id well_id modified created')
-
-    data = pd.merge(data0, platedata, on='barcode')
-
-    # data.compound_number = data.compound_number.apply(lambda x: unicode(int(x)))
-    # data.compound_concentration = data.compound_concentration.apply(FloatLabel)
-
-    def log10(s):
-        f = float(s)
-        return (u'-inf' if f == 0.0 else
-                unicode(round(ma.log10(f), 1)))
-
-    data.compound_concentration = data.compound_concentration.apply(log10)
-
-    del log10
-
-    data.rename(columns={u'compound_concentration':
-                            u'log10_compound_concentration'},
-                inplace=True)
-                                      
-    barcodes = set(data.barcode)
-
-    # it'd be nice to have an "extract" method that combines both of the following:
-    compound_0 = data[data.compound_number == '0']
-    compound_0.reset_index(inplace=True, drop=True)
-    assert len(compound_0) > 0
-    assert set(compound_0.barcode) == barcodes
-    assert (compound_0.log10_compound_concentration == '-inf').all()
-
-    data = data[data.compound_number != '0']
-    data.reset_index(inplace=True, drop=True)
-    assert len(data) > 0
-    assert len(data[data.sample_code == 'CRL']) == 0
-    assert len(data[data.sample_code == 'BL']) == 0
-    assert (data.log10_compound_concentration != '-inf').all()
-
-
-    data = pd.merge(data,
-                    keep(seeded, [u'barcode', u'estimated_seeding_signal'],
-                         axis=1),
-                    on=u'barcode', how='left')
-
-
-    controls = compound_0[compound_0.sample_code == 'CRL']
-    controls.reset_index(inplace=True, drop=True)
-    assert set(controls.barcode) == barcodes
-    background = compound_0[compound_0.sample_code != 'CRL']
-    background.reset_index(inplace=True, drop=True)
-    set(background.barcode) == barcodes
-    assert all(background.sample_code == 'BL')
-    assert len(controls) + len(background) == len(compound_0)
-
-    del compound_0
-
-    def subtract_background(df,
-                            bg=(background.groupby(u'barcode')[u'signal']
-                                .agg(u'mean std'.split()))):
-        ret = df.set_index(u'barcode')
-        ret[u'signal'] -= bg[u'mean']
-
-        ret.insert(list(ret.columns).index(u'signal') + 1,
-                   u'bg_std',
-                   ret.join(bg['std'])['std'])
-        
-        ret.reset_index(inplace=True)
-        return ret, ret[ret.signal < 0]
-
-    data1, negdata = subtract_background(data)
-    controls1, negcrls = subtract_background(controls)
-
-    comparison1 = (controls.groupby([u'barcode',
-                           lambda c: (u'2' if controls.ix[c][u'column'] == '2'
-                                      else '12,13')]).mean().unstack().reset_index())
-
-    # comparison1 = (
-    #     controls.groupby([u'barcode',
-    #                       lambda c: (u'2' if controls.ix[c][u'column'] == '2'
-    #                                  else '12,13')])
-    #             .mean().unstack().reset_index())
-
-if False:
-
-    glob = globals()
-    for name in (u'data data0 data1 platedata controls1 background '
-                 u'negdata negcrls comparison1'.split()):
-        df = glob[name]
-        df.to_csv(tsv_path(name), '\t', index=False,
-                  float_format='%.1f')
-
-    def filterobj(test, obj):
-      return obj[test(obj)]
-
-    # filterobj(lambda x: x["mean"] >= 0,
-    #           gb.xs(u'R', level=1) - gb.xs(u'L', level=1))
-              
-
-if False:
-    multikeycols = (u'cell_name compound_number compound_concentration time '
-                    '__replicate__'.split())
-
-    data.insert(len(multikeycols) - 1,
-                multikeycols[-1],
-                Replicates(data, keycolumns=multikeycols[:-1]))
-
-    data.set_index(multikeycols, inplace=True)
-                   
-    # import pandas.core.common as com
-    # import pandas.hashtable as htable
-    # k, c = htable.value_count_object(cc, com.isnull(cc))
-    # result = se(c, index=k)
-    # from pdb import set_trace as ST
-    # ST()
-    # s = repr(result)
-
-if False:
-    import os, time, select, pty
-         
-    verbose = bool(os.environ.get("TEST_VERBOSE"))
-         
-    #def runWithTimeout(cmd, timeout):
-    def runWithTimeout(callback, timeout):
-        # args = cmd.split()
-        pid, fd = pty.fork();
-        startTime = time.time()
-        endTime = startTime + timeout
-         
-        if pid == 0:
-            #os.execvp(args[0], args)
-            callback()
-            exit(0)
-
-        output = ""
-        while True:
-            timeleft = endTime - time.time()
-            if timeleft <= 0:
-                break
-            i, o, e = select.select([fd], [], [], timeleft)
-            if fd in i:
-                try:
-                    str = os.read(fd, 1)
-                    output += str
-                except OSError, e:
-                    exitPid, status = os.waitpid(pid, os.WNOHANG)
-         
-                    if exitPid == pid:
-                        if verbose:
-                            print "Child exited with %i" % status
-                        return status, output
-         
-        if verbose:
-            print "Command timed out: killing pid %i" % pid
-         
-        os.kill(pid, signal.SIGINT)
-        raise Exception("Command execution time exceeded %i seconds" % timeout,
-                        outputSoFar=output)
-
-    # import sys
-    # s = set((float(u'nan'), float(u'nan')))
-    # import numpy as np
-    # s = set((np.nan, np.nan))
-    # print 'ok'
-
-    import re
-    # nows = re.compile(u'\S')
-    # data = data.drop([c for c in data
-    #                   if all([x is None or not nows.match(str(x))
-    #                           for x in data[c].dropna()])], 1)
-
-    # y = data[u'None.5']
-
-    # yk = y.keys()
-
-    # ykt = tuple(yk)
-
-    # print 'ok'
-
-    # yks = set(ykt)
-
-    # print len(yks)
-
-    # yv = y.values
-    # yvc = y.value_counts()
-
-    # yvs = set(yv)
-    # print "yvs ok"
-
-    # yvcs = set(yvc)
-    # print "yvcs ok"
-
-    # print len(yvs)
-    # print len(yvcs)
-
-    x = data[None]
-
-    # xk = x.keys()
-
-    # xkt = tuple(xk)
-
-    # print 'ok'
-
-    # xks = set(xkt)
-
-    # print len(xks)
-
-    # xvc = x.value_counts()
-    # print 'xvc ok'
-    # print len(xvc)
-
-    # xvcs = set(xvc)
-    # print "xvcs ok"
-    # print len(xvcs)
-
-    xv = x.values
-    print 'xv ok'
-    print len(xv)
-
-    xvt = tuple(xv)
-    print 'xv ok'
-    print len(xvt)
-
-    import signal as sig
-    def handler(s, f):
-        print 'signal %s received' % s
-        raise Exception(u'timeout')
-
-    sig.signal(sig.SIGALRM, handler)
-
-    left, right = 0, len(xv)
-    maxlen = right
-    minfailed = right
-    timeout = 30
-    timeout = 600
-    n = None
-    xvs = None
-    def callback():
-        global xvs
-        xvs = set(xv[:n])
-
-    while left < right:
-        n = (left + right)/2
-        # n = right
-
-        print left, n, right
-        l = n
-        starttime = time.time()
-        print 'about to call runWithTimeout'
-        try:
-            sig.alarm(timeout)
-            runWithTimeout(callback, timeout)
-        except Exception, e:
-            if not 'timeout' in str(e):
-                raise
-            print "length = %d FAILED" % n
-            if minfailed > n:
-                minfailed = n
-            right = n
-        else:
-            elapsed = time.time() - starttime
-            d = elapsed/l
-            print "length = %d ok (%.0f, %.1g, %.0f)" % (l, elapsed, d, d*maxlen)
-            left = max(n, left+1)
-
-    left, right = 0, minfailed
-    while left + 1 < right:
-        n = (left + right)/2
-        print left, n, right
-        l = n - left
-        print 'about to call runWithTimeout'
-        try:
-            sig.alarm(1)
-            runWithTimeout(callback, timeout)
-        except Exception, e:
-            if not 'timeout' in str(e):
-                raise
-            print "length = %d FAILED" % l
-            if minfailed > right:
-                minfailed = right
-            left = n
-        else:
-            elapsed = time.time() - starttime
-            d = elapsed/l
-            print "length = %d ok (%.0f, %.1g, %.0f)" % (l, elapsed, d, d*maxlen)
-            right = n
-
+    # WRITE OUT RESULTS
+    data0.to_csv(tsv_path('test_dataset'), '\t', index=False, float_format='%.1f')
