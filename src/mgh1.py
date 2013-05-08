@@ -112,8 +112,8 @@ if True:
         xcol = u'seed_cell_number_ml'
         ycol = u'signal'
         sdf = df.sort(columns=[xcol], axis=0)
-        ls = pd.ols(x=sdf[xcol][2:], y=sdf[ycol][2:])
-        ret = ls.beta
+        # ols = "ordinary least squares"
+        ret = pd.ols(x=sdf[xcol][2:], y=sdf[ycol][2:]).beta
         ret.index = index
         return ret
 
@@ -131,6 +131,8 @@ if True:
 # ---------------------------------------------------------------------------
 
     # READING IN THE DATA FROM DISK
+    ## 1. datasets = read_datasets('/path/to/file', format=tsv)
+
     datapath = get_datapath()
     print u'reading data from %s...\t' % datapath,; sys.stdout.flush()
     workbook = pd.ExcelFile(str(datapath))
@@ -181,6 +183,10 @@ if True:
     # ZR-75-1                  12  non-null values
     # dtypes: float64(22)
 
+
+    ## 2. calibration = dataset.calibration
+    ##    calibration.rename_columns(callback_or_dict, inplace=True)
+
     calibration.rename(columns={calibration.columns[0]:
                                     normalize_label(calibration.columns[0])},
                        inplace=True)
@@ -221,6 +227,8 @@ if True:
 # ---------------------------------------------------------------------------
 
     # RESTRUCTURE CALIBRATION DF
+    ## 3. ??? calibration.pivot(...)
+    ##    calibration.rename_index(callback_or_string, inplace=True)
     calibration = calibration.set_index(calibration.columns[0]).stack()
 
     # At this point, the calibration df looks like this:
@@ -377,6 +385,9 @@ if True:
 
 # ---------------------------------------------------------------------------
     # COMPUTE REGRESSION
+    ## 4. coeff = calibration.groupby('cell_name').ols(xcol='seed_cell_number_ml',
+    ##                                                 ycol='signal')
+
     coeff = calibration.groupby(u'cell_name').apply(regress)
     del calibration
 
@@ -432,6 +443,9 @@ if True:
 # ---------------------------------------------------------------------------
 
     # CLEANUP SEEDED DF
+    ## 5. seeded = dataset.seeded
+    ##    seeded.rename_columns(callback_or_dict, inplace=True)
+    ##    seeded.drop_columns(callback_or_sequence, inplace=True)
 
     # In [115]: seeded
     # Out[115]: 
@@ -448,6 +462,8 @@ if True:
     seeded.rename(columns=normalize_label, inplace=True)
     seeded.rename(columns={u'cell_line': u'cell_name'}, inplace=True)
     seeded = dropcols(seeded, u'read_date cell_id')
+
+    ## 6. seeded.barcode.apply(fix_barcode, inplace=True)
 
     # fix malformed barcodes
     seeded.barcode = seeded.barcode.apply(fix_barcode)
@@ -470,6 +486,8 @@ if True:
 # ---------------------------------------------------------------------------
 
     # UPDATE SEEDED DF WITH INFO FROM CALIBRATION DF
+    ## 7. seeded.join(coeff, on='cell_name', how='outer', inplace=True)
+
     seeded = pd.merge(seeded, coeff, on=u'cell_name', how='outer')
     del coeff
 
@@ -484,6 +502,10 @@ if True:
     # coefficient                 318  non-null values
     # intercept                   318  non-null values
     # dtypes: float64(3), object(2)
+
+    ## 8. seeded.estimated_seeding_signal = \
+    ##         np.round(seeded.intercept +
+    ##                  seeded.seeding_density_cells_ml * seeded.coefficient)
 
     seeded[u'estimated_seeding_signal'] = \
         np.round(seeded.intercept +
@@ -583,6 +605,9 @@ if True:
     for c in u'qcscore pass_fail manual_flag'.split():
         platedata[c] = platedata[c].apply(maybe_to_int)
 
+    ## 9. platedata = dataset.platedata
+    ##    platedata.keep_columns(callback_or_sequence, inplace=True)
+
     platedata = keepcols(platedata,
                          u'barcode time qcscore pass_fail manual_flag')
 
@@ -658,6 +683,9 @@ if True:
     # none_5                    1  non-null values
     # dtypes: float64(10), object(8)
 
+    ## 10. welldata = dataset.welldata
+    ##     ??? welldata.dropna(criterion_callback, how='all, inplace=True)
+
     welldata = dropna(welldata)
 
     # In [184]: welldata
@@ -713,7 +741,7 @@ if True:
     # dtypes: float64(1), object(9)
 
 # ---------------------------------------------------------------------------
-
+    ## TBC
     # UPDATE WELLDATA DF WITH INFO FROM SEEDED AND PLATEDATA DFS
     welldata = pd.merge(welldata, seeded, on=u'barcode', how='left')
     del seeded
