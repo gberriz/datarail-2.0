@@ -35,8 +35,12 @@
 
     ifngamma: Interferon-γ
     sirolimus: Rapamycin
-    
 
+  but also
+
+    cell_line: Cell Lines
+    small_molecule: Inhibitors
+    protein: ligand
 
 
 
