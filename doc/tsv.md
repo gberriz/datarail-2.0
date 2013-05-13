@@ -23,8 +23,13 @@ by a content section.
   section: name, type, category (descibed below), and description
   (optional).
 
-* The main purpose of the header is to guide the parsing of the file
+* Therefore, the rows of the content section all have the same number of
+  columns as there are rows in the header.
+
+* The main purpose of the header is to *guide the parsing* of the file
   by programmatic tools.
+
+* the columns of the header section are the following
 
 ** __name__ : lower-case letters, digits, and underscores only (no
    spaces, punctuation, parentheses, etc.); IOW, cell_line is a valid
@@ -91,6 +96,13 @@ by a content section.
 ***** list of special values for data fields; e.g. -Inf, NaN; possibly
       conditions such as > 0
 
+*** especial "row of headers" between the header and content section
+    to help connect the rows of the header with the columns of the
+    content section;
 
-* Therefore, the rows of the content section all have the same number of
-  columns as there are rows in the header.
+* I object to making this row mandatory, because it introduces the
+  potential for inconsistencies
+
+* A compromise would be to make this row optional, but this would
+  require some way to tell parsing programs that a given row was such
+  an optional header row
