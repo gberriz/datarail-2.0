@@ -1,3 +1,39 @@
+* some basic definitions/distinctions
+
+* associated with each measurement (or quantum of "data") are several
+attributes that we refer to collectively as "metadata".
+
+* it is useful to classify metadata according to their general
+purpose, resulting in the following three broad categories (roughly in
+order of decreasing intrinsic significance/scope of
+reference/"half-life")
+
+** model metadata (aka "factors"): these correspond to the variables
+   (or transforms thereof) of the scientific model(s) behind the
+   experiment; (modeling)
+** confounder metadata (aka "confounders"): experimental details;
+   useful for forensics, troubleshooting, optimization; (LIMS)
+** relational reference metadata: internal indices used to relate data
+   points to each other; (RDBM)
+
+* parallel to the model/confounder distinction above, is a distinction
+  between ideal and actual entities: in some contexts the name
+  "lapatinib", for example, is a reference to a certain compound "in
+  general", whereas in other context, the same name refers to a
+  specific reagent supplied by a specific vendor, having a batch
+  number, used in a specific experiment, at a specific date, etc.
+
+---
+
+   Factors are variables in the model that motivates the experiment,
+   while confounders are variables that are extraneous to this model.
+   Operationally, confounders are distinguished from factors in that
+   the former are the part of the available information that the
+   subsequent analysis either ignores or aims to "analyze away"
+   (e.g. by averaging).
+
+---
+
 The following is an earlier unfinished attempt at putting down my
 ideas on metadata.
 
