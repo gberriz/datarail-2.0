@@ -10,7 +10,7 @@ function out = mapcells(cells, rule, varargin)
     if nvargs == 0
       rule = @(k) mapget(rule, k, k);
     else
-      d = varargs(1);
+      d = varargin(1);
       rule = @(k) mapget(rule, k, d);
     end
   elseif nvargs == 1
