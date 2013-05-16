@@ -1,13 +1,24 @@
-* Two barcodes are dates:
+* Sheets PlateData, WellData, WellDataMapped mention two barcodes that
+  are dates:
 
-  2012-10-24 17:46:33  
+  2012-10-24 17:46:33
   2012-10-31 15:20:16
 
-  Furthermore, in some sheets the same dates (as barcodes) are
-  represented in a different format:
+  Sheets SeededNumbers and MaxConcentr_Signal mention two barcodes
+  matching the same dates, but in a slightly different format:
 
-  2012-10-24 5:46:33 PM  
+  2012-10-24 5:46:33 PM
   2012-10-31 3:20:16 PM
+
+** To make matters worse, MATLAB's xlsread function interprets these
+   two formats differently.
+
+  2012-10-24 17:46:33 -> '41206.7407'
+  2012-10-31 15:20:16 -> '41213.6391'
+
+  2012-10-24 5:46:33 PM -> '2012-10-24 5:46:33 PM'
+  2012-10-31 3:20:16 PM -> '2012-10-31 3:20:16 PM'
+
 
 ** Until we have their "true" values, these barcodes will be
    normalized to the standard ISO 8601 local time format
@@ -17,7 +28,7 @@
   2012-10-31 15:20:16, 2012-10-31 3:20:16 PM -> 20121031T152016
 
 ** The row in the PlateData sheet having barcode 20121024T174633 also
-   includes this in the notifications column:
+   includes this in the notifications column (sic!):
 
     NWARNING: Plate height defined in the plate editor does not match the actual plate height. Measured height is 0.00 mm. Plate editor height is 14.83 mm. The results may be affected.|WARNING: Instrument changed the measurement height from 6.5 mm to 14.05 mm  as measurement head can't reach the given height.|WARNING: Instrument changed the measurement height from 14.05 mm to 13.85 mm  as measurement head can't reach the given height.|
 
