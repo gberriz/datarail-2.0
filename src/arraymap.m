@@ -1,2 +1,2 @@
 function out = arraymap(fn, dblarray)
-  out = arrayfun(fn, dblarray, 'UniformOutput', false);
+out = arrayfun(fn, dblarray, 'UniformOutput', false);
