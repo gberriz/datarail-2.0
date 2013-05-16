@@ -36,6 +36,7 @@ if True:
                        else colnames, axis=1)
 
     def dropna(df):
+        # require that at least 10% of any column be non-na's
         return df.dropna(axis=1, thresh=len(df)//10).dropna(axis=0, how='all')
 
     def fix_barcode(b):
@@ -361,7 +362,7 @@ if True:
     # signal    252  non-null values
     # dtypes: float64(1)
 
-    calibration.index.names[0] = u'cell_name'
+    calibration.index.names[0] = u'cell_line'
 
     # At this point, the calibration df looks like this:
     #
@@ -378,21 +379,21 @@ if True:
     # <class 'pandas.core.frame.DataFrame'>
     # Int64Index: 252 entries, 0 to 251
     # Data columns:
-    # cell_name              252  non-null values
+    # cell_line              252  non-null values
     # seed_cell_number_ml    252  non-null values
     # signal                 252  non-null values
     # dtypes: float64(2), object(1)
 
 # ---------------------------------------------------------------------------
     # COMPUTE REGRESSION
-    ## 4. coeff = calibration.groupby('cell_name').ols(xcol='seed_cell_number_ml',
+    ## 4. coeff = calibration.groupby('cell_line').ols(xcol='seed_cell_number_ml',
     ##                                                 ycol='signal')
 
-    coeff = calibration.groupby(u'cell_name').apply(regress)
+    coeff = calibration.groupby(u'cell_line').apply(regress)
     del calibration
 
     #                coefficient    intercept
-    # cell_name                              
+    # cell_line                              
     # AU-565            0.768691   259.587801
     # BT-20             0.715104  1003.095948
     # BT-474            0.665241  1454.570673
@@ -417,7 +418,7 @@ if True:
 
     coeff.reset_index(inplace=True)
 
-    #         cell_name  coefficient    intercept
+    #         cell_line  coefficient    intercept
     # 0          AU-565     0.768691   259.587801
     # 1           BT-20     0.715104  1003.095948
     # 2          BT-474     0.665241  1454.570673
@@ -460,7 +461,7 @@ if True:
     # dtypes: float64(2), object(3)
 
     seeded.rename(columns=normalize_label, inplace=True)
-    seeded.rename(columns={u'cell_line': u'cell_name'}, inplace=True)
+    # seeded.rename(columns={u'cell_line': u'cell_name'}, inplace=True)
     seeded = dropcols(seeded, u'read_date cell_id')
 
     ## 6. seeded.barcode.apply(fix_barcode, inplace=True)
@@ -470,7 +471,7 @@ if True:
 
     # remove the '_HMS' suffix from cell-line names
     hmssfx_re = re.compile(ur'_HMS$')
-    seeded.cell_name = seeded.cell_name.apply(lambda s: hmssfx_re.sub(u'', s))
+    seeded.cell_line = seeded.cell_line.apply(lambda s: hmssfx_re.sub(u'', s))
     del hmssfx_re
 
     # In [117]: seeded
@@ -478,7 +479,7 @@ if True:
     # <class 'pandas.core.frame.DataFrame'>
     # Int64Index: 332 entries, 0 to 331
     # Data columns:
-    # cell_name                   332  non-null values
+    # cell_line                   332  non-null values
     # barcode                     332  non-null values
     # seeding_density_cells_ml    332  non-null values
     # dtypes: float64(1), object(2)
@@ -486,9 +487,9 @@ if True:
 # ---------------------------------------------------------------------------
 
     # UPDATE SEEDED DF WITH INFO FROM CALIBRATION DF
-    ## 7. seeded.join(coeff, on='cell_name', how='outer', inplace=True)
+    ## 7. seeded.join(coeff, on='cell_line', how='outer', inplace=True)
 
-    seeded = pd.merge(seeded, coeff, on=u'cell_name', how='outer')
+    seeded = pd.merge(seeded, coeff, on=u'cell_line', how='outer')
     del coeff
 
     # In [157]: seeded
@@ -496,7 +497,7 @@ if True:
     # <class 'pandas.core.frame.DataFrame'>
     # Int64Index: 332 entries, 0 to 331
     # Data columns:
-    # cell_name                   332  non-null values
+    # cell_line                   332  non-null values
     # barcode                     332  non-null values
     # seeding_density_cells_ml    332  non-null values
     # coefficient                 318  non-null values
@@ -516,7 +517,7 @@ if True:
     # <class 'pandas.core.frame.DataFrame'>
     # Int64Index: 332 entries, 0 to 331
     # Data columns:
-    # cell_name                   332  non-null values
+    # cell_line                   332  non-null values
     # barcode                     332  non-null values
     # seeding_density_cells_ml    332  non-null values
     # coefficient                 318  non-null values
@@ -524,7 +525,7 @@ if True:
     # estimated_seeding_signal    318  non-null values
     # dtypes: float64(4), object(2)
 
-    seeded = dropcols(seeded, [u'cell_name'])
+    seeded = dropcols(seeded, [u'cell_line'])
 
     # In [161]: seeded
     # Out[161]: 
