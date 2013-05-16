@@ -1,0 +1,11 @@
+	Tab	Comment
+	Cell_Lines	The lines used - We have screened 23 of them so far (dec 2012)
+	SampleDef	The Drug used and their assigned IDs
+	SeededNumbers	The cell number seeded (this is cells/ ml - seed volume is 27 ul / well - 384 well plate) - Each lines was characterized systematically and further adjustments were made after the first round of experiments to increase signa/ noise for lines of lower seed numbers
+	Plate Data	"Details of the screen plates; 3 day, 5 day and 7 day drugging; ""Manual Flag"" : Manual inspection of the data for each plate was perfomed to make a final call on whether the data should be included in subsequent analysis - Automatic QC generate a QCscore and a pass fail code (criteria: CV of Ctl <20%, CRL/BLK >5 , High conc vlues values < low conc values, Plate error - reader message."
+	WellData	All the data we have - QC passed or not
+	WellDataMapped	Concentrations of compounds were mapped onto the well data
+	PlateMap	384 well plate map with row and column reference - all drugs used at the same concentration (top 10 uM) - Each plate contains a cell line and 28 drugs.
+	RefSeedSignal	Cells were seeded at multiple density and stained using CTG to create a reference dataset: signal/cell - see details within the tab
+	TimeZeroData	More seeding reference data; once of these datasets is in the RefSeedSignal Tab; this Tab shows that the results across 2 experiments are stable implying we can use this to infer cell numbers in the screen plate data - this might not be completely true due to culture conditions changing over time but it's probably as good as we can have it for now
+	MaxConcentr_Signal	I constructed this to have an idea of how many treated values are detectable above the background and within the frame of reference of the time Zero data 
