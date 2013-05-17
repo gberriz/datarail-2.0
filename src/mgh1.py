@@ -899,7 +899,7 @@ if True:
         (u'rcat replicate_group_id background_id control_id '
          u'cell_line compound_number compound_concentration_log10 time '
          u'signal '
-         u'barcode seeding_density_cells_ml coefficient intercept '
+         u'barcode seeding_density_cells_ml intercept coefficient '
          u'estimated_seeding_signal row column modified created '
          u'qcscore pass_fail manual_flag'.split()),
         axis=1)
@@ -920,8 +920,8 @@ if True:
     # signal                          127488  non-null values
     # barcode                         127488  non-null values
     # seeding_density_cells_ml        127488  non-null values
-    # coefficient                     122112  non-null values
     # intercept                       122112  non-null values
+    # coefficient                     122112  non-null values
     # estimated_seeding_signal        122112  non-null values
     # row                             127488  non-null values
     # column                          127488  non-null values
