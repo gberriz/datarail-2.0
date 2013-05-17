@@ -10,7 +10,7 @@ else
 end
 
 if round(dbl) == dbl
-  out = sprintf('%d', dbl);
+  out = num2str(dbl);
 else
   out = label;
 end
