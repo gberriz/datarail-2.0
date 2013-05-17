@@ -12,16 +12,13 @@ calibration = dataset('XLSFile', datapath, 'Sheet', 'RefSeedSignal', ...
 seeded = dataset('XLSFile', datapath, 'Sheet', 'SeededNumbers');
 warning('on', 'all');
 
-% ---------------------------------------------------------------------------
+%% --------------------------------------------------------------------------
 
 calibration.Properties.VarNames{1} = ...
   normalize_label(calibration.Properties.VarNames{1});
 
-calibration = maybe_rename_varname(calibration, ...
-                                   'MCFDCIS_COM', 'MCF10DCIS_COM');
-
-calibration = renamecols(calibration, ...
-                         containers.Map({'MCFDCIS_COM'}, {'MCF10DCIS_COM'}));
+% calibration = renamecols(calibration, ...
+%                          containers.Map({'MCFDCIS_COM'}, {'MCF10DCIS_COM'}));
 
 calibration = stack(calibration, ...
                     calibration.Properties.VarNames(1, 2:end), ...
@@ -30,12 +27,45 @@ calibration = stack(calibration, ...
 calibration = renamecols(calibration, ...
                          containers.Map({'signal_Indicator'}, {'cell_line'}));
 
+%% --------------------------------------------------------------------------
+
+calibration = apply(@fix_cell_line, calibration, 'cell_line');
+
 calibration = calibration(:, calibration.Properties.VarNames([2 1 3]));
 
 calibration = sortrows(calibration, ...
   calibration.Properties.VarNames(1, 1:2), {'ascend', 'descend'});
 
 calibration.cell_line = nominal(calibration.cell_line);
+
+cls = transpose(cellstr(unique(calibration.cell_line)));
+coeff_ca = cell(1, length(cls) + 1);
+coeff_ca{1} = strsplit('cell_line intercept slope');
+i = 2;
+for c = cls
+  cl = c{1};
+  subds = calibration(calibration.cell_line==cl, ...
+                      {'seed_cell_number_ml', 'signal'});
+  cffs = coeffvalues(fit(double(subds.seed_cell_number_ml), ...
+                         double(subds.signal), 'poly1'));
+  coeff_ca{i} = [c num2cell(cffs)];
+  i = i + 1;
+end
+coeff = cell2dataset(vertcat(coeff_ca{:}));
+clear('cls', 'c', 'cl', 'subds', 'cffs', 'coeff_ca');
+
+%% --------------------------------------------------------------------------
+
+% cls = unique(calibration.cell_line)
+% coeff_ca = cell(1, 
+% for c = cellstr(unique(calibration.cell_line))'
+%   cl = c{1};
+%   subds = calibration(calibration.cell_line==cl, ...
+%       {'seed_cell_number_ml', 'signal'});
+%   cffs = coeffvalues(fit(double(subds.seed_cell_number_ml), ...
+%                          double(subds.signal), 'poly1'));
+% end
+
 % coeff = LinearModel.fit(calibration, ...
 %                         'CategoricalVars', ...
 %                         calibration.Properties.VarNames{1}, ...
@@ -44,24 +74,17 @@ calibration.cell_line = nominal(calibration.cell_line);
 %                         'ResponseVar', ...
 %                         calibration.Properties.VarNames{3});
 
-% model = sprintf('%s-Weight*%s', calibration.Properties.VarNames(1, 1:2));
-% coeff = ??
-
-% ---------------------------------------------------------------------------
-
-% ---------------------------------------------------------------------------
-
-% ---------------------------------------------------------------------------
+%% --------------------------------------------------------------------------
 
 seeded = renamecols(seeded, @normalize_label);
-% seeded = maybe_rename_varname(seeded, 'cell_line', 'cell_name');
 seeded = dropcols(seeded, strsplit('read_date cell_id'));
 seeded = apply(@fix_barcode, seeded, 'barcode');
 seeded = apply(@strip_hms, seeded, 'cell_line');
 
-% ---------------------------------------------------------------------------
+seeded = join(seeded, coeff, 'Type', 'fullouter');
+clear('coeff');
 
-% ---------------------------------------------------------------------------
+%% --------------------------------------------------------------------------
 
 platedata = renamecols(platedata, @normalize_label);
 
@@ -73,9 +96,9 @@ for s = strsplit('qcscore pass_fail manual_flag')
 end
 
 platedata = keepcols(platedata, strsplit(['barcode time qcscore pass_fail ', ...
-                                          manual_flag']));
+                                          'manual_flag']));
 
-% ---------------------------------------------------------------------------
+%% --------------------------------------------------------------------------
 
 welldata = renamecols(welldata, @normalize_label);
 welldata = renamecols(welldata, containers.Map( ...
@@ -98,12 +121,15 @@ welldata.compound_concentration_log10 = ...
 
 welldata = dropcols(welldata, ...
                     strsplit(['cell_id well_id sample_code ' ...
-		              'compound_concentration']));
+                              'compound_concentration']));
 
-% ---------------------------------------------------------------------------
+%% --------------------------------------------------------------------------
 
-%     welldata = pd.merge(welldata, seeded, on=u'barcode', how='left')
-%     del seeded
+welldata = join(welldata, seeded, 'Type', 'leftouter');
+clear('seeded');
+
+welldata = join(welldata, platedata, 'Type', 'leftouter');
+clear('platedata');
 
 %     welldata = pd.merge(welldata, platedata, on=u'barcode', how='left')
 %     del platedata
@@ -113,8 +139,6 @@ welldata = dropcols(welldata, ...
 %                            u'compound_concentration_log10 time').split(),
 %                  _memo=dict(),
 %                  _reset=False):
-
-'rcat cell_line compound_number compound_concentration_log10 time'
 
 %     welldata[u'replicate_group_id'] = welldata.apply(repgroup, axis=1)
 
@@ -139,3 +163,18 @@ welldata = dropcols(welldata, ...
 %     welldata.to_csv(tsv_path('test_dataset'), '\t',
 %                     index=False,
 %                     float_format='%.1f')
+
+%% --------------------------------------------------------------------------
+
+
+%     groups = transpose(cellstr(unique(ds.group)));
+%     coeff_ca = cell(1, length(groups) + 1);
+%     coeff_ca{1} = strsplit('group intercept slope');
+%     i = 2;
+%     for c = groups
+%       subds = ds(ds.group == c{1}, {'x', 'y'});
+%       cvs = coeffvalues(fit(double(subds.x), double(subds.y), 'poly1'));
+%       coeff_ca{i} = [c num2cell(cvs)];
+%       i = i + 1;
+%     end
+%     coeff = cell2dataset(vertcat(coeff_ca{:}));
