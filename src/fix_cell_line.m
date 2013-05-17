@@ -1,0 +1,3 @@
+function out = fix_cell_line(cell_line)
+out = regexprep(regexprep(cell_line, '^MCFDCIS_COM$', 'MCF10DCIS.COM'), ...
+                '_', '-');
