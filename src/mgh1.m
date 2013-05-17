@@ -80,7 +80,7 @@ seeded = dropcols(seeded, strsplit('read_date cell_id'));
 seeded = apply(@fix_barcode, seeded, 'barcode');
 seeded = apply(@strip_hms, seeded, 'cell_line');
 
-seeded = join(seeded, coeff, 'Type', 'fullouter');
+seeded = join(seeded, coeff, 'Type', 'fullouter', 'MergeKeys', true);
 clear('coeff');
 
 %% --------------------------------------------------------------------------
@@ -124,10 +124,10 @@ welldata = dropcols(welldata, ...
 
 %% --------------------------------------------------------------------------
 
-welldata = join(welldata, seeded, 'Type', 'leftouter');
+welldata = join(welldata, seeded, 'Type', 'leftouter', 'MergeKeys', true);
 clear('seeded');
 
-welldata = join(welldata, platedata, 'Type', 'leftouter');
+welldata = join(welldata, platedata, 'Type', 'leftouter', 'MergeKeys', true);
 clear('platedata');
 
 %     welldata = pd.merge(welldata, platedata, on=u'barcode', how='left')
