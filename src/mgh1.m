@@ -1,7 +1,9 @@
 % -*- mode: matlab -*-
 basename = 'bl1';
 basename = 'BreastLinesFirstBatch_MGHData_sent';
-datapath = fullfile('..', 'data', sprintf('%s.xlsx', basename));
+datapath = fullfile('/Users/berriz/Work/scratch/DR20/data', ...
+                    sprintf('%s.xlsx', basename));
+% datapath = fullfile('..', 'data', sprintf('%s.xlsx', basename));
 warning('off', 'MATLAB:codetools:ModifiedVarnames');
 welldata = dataset('XLSFile', datapath, 'Sheet', 'WellDataMapped');
 
@@ -11,22 +13,20 @@ calibration = dataset('XLSFile', datapath, 'Sheet', 'RefSeedSignal', ...
 seeded = dataset('XLSFile', datapath, 'Sheet', 'SeededNumbers');
 warning('on', 'all');
 
-%% --------------------------------------------------------------------------
+%% ------------------------------------------------------------------------
 
 calibration.Properties.VarNames{1} = ...
   normalize_label(calibration.Properties.VarNames{1});
-
-% calibration = renamecols(calibration, ...
-%                          containers.Map({'MCFDCIS_COM'}, {'MCF10DCIS_COM'}));
 
 calibration = stack(calibration, ...
                     calibration.Properties.VarNames(1, 2:end), ...
                     'newDataVarName', 'signal');
 
 calibration = renamecols(calibration, ...
-                         containers.Map({'signal_Indicator'}, {'cell_line'}));
+                         containers.Map({'signal_Indicator'}, ...
+                                        {'cell_line'}));
 
-%% --------------------------------------------------------------------------
+%% ------------------------------------------------------------------------
 
 calibration = apply(@fix_cell_line, calibration, 'cell_line');
 
@@ -53,7 +53,7 @@ end
 coeff = cell2dataset(vertcat(coeff_ca{:}));
 clear('cls', 'c', 'cl', 'subds', 'cffs', 'coeff_ca');
 
-%% --------------------------------------------------------------------------
+%% ------------------------------------------------------------------------
 
 % cls = unique(calibration.cell_line)
 % coeff_ca = cell(1, 
@@ -73,7 +73,7 @@ clear('cls', 'c', 'cl', 'subds', 'cffs', 'coeff_ca');
 %                         'ResponseVar', ...
 %                         calibration.Properties.VarNames{3});
 
-%% --------------------------------------------------------------------------
+%% ------------------------------------------------------------------------
 
 seeded = renamecols(seeded, @normalize_label);
 seeded = dropcols(seeded, strsplit('read_date cell_id'));
@@ -83,7 +83,10 @@ seeded = apply(@strip_hms, seeded, 'cell_line');
 seeded = join(seeded, coeff, 'Type', 'fullouter', 'MergeKeys', true);
 clear('coeff');
 
-%% --------------------------------------------------------------------------
+seeded.estimated_seeding_signal = ...
+  seeded.intercept + seeded.seeding_density_cells_ml .* seeded.slope;
+
+%% ------------------------------------------------------------------------
 
 platedata = renamecols(platedata, @normalize_label);
 
@@ -94,10 +97,10 @@ for s = strsplit('qcscore pass_fail manual_flag')
   platedata = apply(@maybe_to_int, platedata, s{1});
 end
 
-platedata = keepcols(platedata, strsplit(['barcode time qcscore pass_fail ', ...
-                                          'manual_flag']));
+platedata = keepcols(platedata, strsplit(['barcode time qcscore ', ...
+                                          'pass_fail manual_flag']));
 
-%% --------------------------------------------------------------------------
+%% ------------------------------------------------------------------------
 
 welldata = renamecols(welldata, @normalize_label);
 welldata = renamecols(welldata, containers.Map( ...
@@ -122,24 +125,20 @@ welldata = dropcols(welldata, ...
                     strsplit(['cell_id well_id sample_code ' ...
                               'compound_concentration']));
 
-%% --------------------------------------------------------------------------
+%% ------------------------------------------------------------------------
 
 welldata = join(welldata, seeded, 'Type', 'leftouter', 'MergeKeys', true);
 clear('seeded');
 
-welldata = join(welldata, platedata, 'Type', 'leftouter', 'MergeKeys', true);
+welldata = join(welldata, platedata, 'Type', 'leftouter', 'MergeKeys', ...
+                true);
 clear('platedata');
 
-%     welldata = pd.merge(welldata, platedata, on=u'barcode', how='left')
-%     del platedata
+%% ------------------------------------------------------------------------
 
-%     def repgroup(v=None,
-%                  _keycols=(u'rcat cell_line compound_number '
-%                            u'compound_concentration_log10 time').split(),
-%                  _memo=dict(),
-%                  _reset=False):
-
-%     welldata[u'replicate_group_id'] = welldata.apply(repgroup, axis=1)
+welldata.replicate_group_id = repgroup(welldata, ...
+    strsplit(['rcat cell_line compound_number ' ...
+              'compound_concentration_log10 time']));
 
 %     bggroup = groupid_updater(u'barcode', u'background_id', BACKGROUND)
 %     welldata[u'background_id'] = welldata.apply(bggroup, axis=1)
@@ -163,8 +162,7 @@ clear('platedata');
 %                     index=False,
 %                     float_format='%.1f')
 
-%% --------------------------------------------------------------------------
-
+%% ------------------------------------------------------------------------
 
 %     groups = transpose(cellstr(unique(ds.group)));
 %     coeff_ca = cell(1, length(groups) + 1);
