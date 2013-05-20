@@ -1,9 +1,8 @@
 % -*- mode: matlab -*-
 basename = 'bl1';
 basename = 'BreastLinesFirstBatch_MGHData_sent';
-datapath = fullfile('/Users/berriz/Work/scratch/DR20/data', ...
+datapath = fullfile(mfiledir(), '..', 'data', ...
                     sprintf('%s.xlsx', basename));
-% datapath = fullfile('..', 'data', sprintf('%s.xlsx', basename));
 warning('off', 'MATLAB:codetools:ModifiedVarnames');
 welldata = dataset('XLSFile', datapath, 'Sheet', 'WellDataMapped');
 
