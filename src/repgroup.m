@@ -3,7 +3,7 @@ sep = native2unicode(28);
 subds = dset(:, keycols);
 clear('dset');
 n = length(subds);
-c = zeros(n);
+c = zeros(n, 'uint8');
 seen = containers.Map();
 for i = 1:n
   k = dataset2cell(subds(i, :));
