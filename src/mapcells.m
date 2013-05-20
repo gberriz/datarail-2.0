@@ -10,7 +10,7 @@ if isa(rule, 'containers.Map')
   if nvargs == 0
     rule = @(k) mapget(rule, k, k);
   else
-    d = varargin(1);
+    d = varargin{1};
     rule = @(k) mapget(rule, k, d);
   end
 elseif nvargs == 1
