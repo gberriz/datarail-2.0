@@ -1,16 +1,24 @@
 % -*- mode: matlab -*-
-basename = 'bl1';
+
+% basename = 'bl1';
 basename = 'BreastLinesFirstBatch_MGHData_sent';
-datapath = fullfile(mfiledir(), '..', 'data', ...
+datapath = fullfile(mfiledir(), '..', '..', '..', 'data', ...
                     sprintf('%s.xlsx', basename));
+outpath = fullfile(mfiledir(), '..', '..', '..', ...
+                   'dataframes', 'mgh', ...
+                   sprintf('ml_%s.mat', basename));
+clear basename;
+
+%% ------------------------------------------------------------------------
+
 warning('off', 'MATLAB:codetools:ModifiedVarnames');
 welldata = dataset('XLSFile', datapath, 'Sheet', 'WellDataMapped');
-
 platedata = dataset('XLSFile', datapath, 'Sheet', 'PlateData');
 calibration = dataset('XLSFile', datapath, 'Sheet', 'RefSeedSignal', ...
                       'Range', 'A2:V14');
 seeded = dataset('XLSFile', datapath, 'Sheet', 'SeededNumbers');
 warning('on', 'all');
+clear datapath;
 
 %% ------------------------------------------------------------------------
 
@@ -36,41 +44,21 @@ calibration = sortrows(calibration, ...
 
 calibration.cell_line = nominal(calibration.cell_line);
 
-cls = transpose(cellstr(unique(calibration.cell_line)));
+cls = transpose(cellstr(unique(calibration.cell_line, 'stable')));
 coeff_ca = cell(1, length(cls) + 1);
-coeff_ca{1} = strsplit('cell_line intercept slope');
+coeff_ca{1} = strsplit('cell_line slope intercept');
 i = 2;
+index = {'seed_cell_number_ml', 'signal'};
 for c = cls
-  cl = c{1};
-  subds = calibration(calibration.cell_line==cl, ...
-                      {'seed_cell_number_ml', 'signal'});
-  cffs = coeffvalues(fit(double(subds.seed_cell_number_ml), ...
-                         double(subds.signal), 'poly1'));
+  subds = sortrows(calibration(calibration.cell_line==c{1}, index), ...
+                   index{1});
+  cffs = coeffvalues(fit(double(subds.seed_cell_number_ml(3:end)), ...
+                         double(subds.signal(3:end)), 'poly1'));
   coeff_ca{i} = [c num2cell(cffs)];
   i = i + 1;
 end
 coeff = cell2dataset(vertcat(coeff_ca{:}));
-clear('cls', 'c', 'cl', 'subds', 'cffs', 'coeff_ca');
-
-%% ------------------------------------------------------------------------
-
-% cls = unique(calibration.cell_line)
-% coeff_ca = cell(1, 
-% for c = cellstr(unique(calibration.cell_line))'
-%   cl = c{1};
-%   subds = calibration(calibration.cell_line==cl, ...
-%       {'seed_cell_number_ml', 'signal'});
-%   cffs = coeffvalues(fit(double(subds.seed_cell_number_ml), ...
-%                          double(subds.signal), 'poly1'));
-% end
-
-% coeff = LinearModel.fit(calibration, ...
-%                         'CategoricalVars', ...
-%                         calibration.Properties.VarNames{1}, ...
-%                         'PredictorVars', ...
-%                         calibration.Properties.VarNames{2}, ...
-%                         'ResponseVar', ...
-%                         calibration.Properties.VarNames{3});
+clear i cls index csubds cffs coeff_ca calibration;
 
 %% ------------------------------------------------------------------------
 
@@ -80,21 +68,26 @@ seeded = apply(@fix_barcode, seeded, 'barcode');
 seeded = apply(@strip_hms, seeded, 'cell_line');
 
 seeded = join(seeded, coeff, 'Type', 'fullouter', 'MergeKeys', true);
-clear('coeff');
+clear coeff;
 
 seeded.estimated_seeding_signal = ...
-  seeded.intercept + seeded.seeding_density_cells_ml .* seeded.slope;
+  round(seeded.intercept + ...
+        seeded.seeding_density_cells_ml .* seeded.slope);
+
+seeded.seeding_density_cells_ml = round(seeded.seeding_density_cells_ml);
+seeded.intercept = roundp(seeded.intercept, 1);
+seeded.slope = roundp(seeded.slope, 1);
 
 %% ------------------------------------------------------------------------
 
 platedata = renamecols(platedata, @normalize_label);
 
 platedata.time = cellmap(@extract_time, platedata.protocol_name);
-platedata = apply(@fix_barcode, platedata, 'barcode');
 
 for s = strsplit('qcscore pass_fail manual_flag')
   platedata = apply(@maybe_to_int, platedata, s{1});
 end
+clear s;
 
 platedata = keepcols(platedata, strsplit(['barcode time qcscore ', ...
                                           'pass_fail manual_flag']));
@@ -108,11 +101,12 @@ welldata = renamecols(welldata, containers.Map( ...
 
 welldata = dropna(welldata);
 
-welldata = apply(@fix_barcode, welldata, 'barcode');
+%% ------------------------------------------------------------------------
 
 for s = strsplit('compound_number column')
   welldata = apply(@maybe_to_int, welldata, s{1});
 end
+clear s;
 
 welldata.rcat = mapcells(welldata.sample_code, containers.Map( ...
   strsplit('BDR BL CRL'), strsplit('1 2 3')), '0');
@@ -127,11 +121,11 @@ welldata = dropcols(welldata, ...
 %% ------------------------------------------------------------------------
 
 welldata = join(welldata, seeded, 'Type', 'leftouter', 'MergeKeys', true);
-clear('seeded');
+clear seeded;
 
 welldata = join(welldata, platedata, 'Type', 'leftouter', 'MergeKeys', ...
                 true);
-clear('platedata');
+clear platedata;
 
 %% ------------------------------------------------------------------------
 
@@ -139,38 +133,23 @@ welldata.replicate_group_id = repgroup(welldata, ...
     strsplit(['rcat cell_line compound_number ' ...
               'compound_concentration_log10 time']));
 
-%     bggroup = groupid_updater(u'barcode', u'background_id', BACKGROUND)
-%     welldata[u'background_id'] = welldata.apply(bggroup, axis=1)
-%     del bggroup
+welldata.background_id = ...
+    assign_groupid(welldata, 'barcode', 'background_id', '2');
 
-%     ctrlgroup = groupid_updater(u'barcode', u'control_id', CONTROL)
-%     welldata[u'control_id'] = welldata.apply(ctrlgroup, axis=1)
-%     del ctrlgroup
+welldata.control_id = ...
+    assign_groupid(welldata, 'barcode', 'control_id', '3');
 
-%     welldata = \
-%       welldata.reindex_axis(
-%         (u'rcat replicate_group_id background_id control_id '
-%          u'cell_line compound_number compound_concentration_log10 time '
-%          u'signal '
-%          u'barcode seeding_density_cells_ml coefficient intercept '
-%          u'estimated_seeding_signal row column modified created '
-%          u'qcscore pass_fail manual_flag'.split()),
-%         axis=1)
-
-%     welldata.to_csv(tsv_path('test_dataset'), '\t',
-%                     index=False,
-%                     float_format='%.1f')
+welldata = ...
+    welldata(:, strsplit(['rcat replicate_group_id background_id '...
+                          'control_id cell_line compound_number ' ...
+                          'compound_concentration_log10 time signal ' ...
+                          'barcode seeding_density_cells_ml intercept ' ...
+                          'slope estimated_seeding_signal row column ' ...
+                          'modified created qcscore pass_fail ' ...
+                          'manual_flag']));
 
 %% ------------------------------------------------------------------------
 
-%     groups = transpose(cellstr(unique(ds.group)));
-%     coeff_ca = cell(1, length(groups) + 1);
-%     coeff_ca{1} = strsplit('group intercept slope');
-%     i = 2;
-%     for c = groups
-%       subds = ds(ds.group == c{1}, {'x', 'y'});
-%       cvs = coeffvalues(fit(double(subds.x), double(subds.y), 'poly1'));
-%       coeff_ca{i} = [c num2cell(cvs)];
-%       i = i + 1;
-%     end
-%     coeff = cell2dataset(vertcat(coeff_ca{:}));
+% export(welldata, 'file', outpath);
+save(outpath, 'welldata');
+clear outpath;
