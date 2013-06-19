@@ -6,7 +6,6 @@ if True:
                        message=ur'.*with\s+inplace=True\s+will\s+return\s+None',
                        category=exc.FutureWarning,
                        module=u'pandas')
-
     import os.path as op
     import pandas as pd
     # from pandas import DataFrame as df, Series as se
@@ -70,6 +69,9 @@ if True:
     def groupid_updater(key, col, rcat, default=u''):
         memo=dict()
         def groupid(v=None, _reset=False):
+            # the None default for the v parameter is just so that one
+            # can call groupid(_reset=True); otherwise, the v
+            # parameter is expected to be a Pandas Series object.
             if _reset: return memo.clear()
             rc = v[u'rcat']
             return (memo.setdefault(v[key], unicode(len(memo)))
@@ -109,12 +111,12 @@ if True:
         return (u'none_0' if label is None
                 else _cleanup_re.sub(u'_', unicode(label).strip()).lower())
 
-    def regress(df, index=pd.Index((u'coefficient', u'intercept'))):
+    def regress(df, index=pd.Index((u'slope', u'intercept'))):
         xcol = u'seed_cell_number_ml'
         ycol = u'signal'
-        sdf = df.sort(columns=[xcol], axis=0)
+        subdf = df.sort(columns=[xcol], axis=0)
         # ols = "ordinary least squares"
-        ret = pd.ols(x=sdf[xcol][2:], y=sdf[ycol][2:]).beta
+        ret = pd.ols(x=subdf[xcol][2:], y=subdf[ycol][2:]).beta
         ret.index = index
         return ret
 
@@ -390,9 +392,10 @@ if True:
     ##                                                 ycol='signal')
 
     coeff = calibration.groupby(u'cell_line').apply(regress)
+
     del calibration
 
-    #                coefficient    intercept
+    #                      slope    intercept
     # cell_line                              
     # AU-565            0.768691   259.587801
     # BT-20             0.715104  1003.095948
@@ -418,7 +421,7 @@ if True:
 
     coeff.reset_index(inplace=True)
 
-    #         cell_line  coefficient    intercept
+    #         cell_line        slope    intercept
     # 0          AU-565     0.768691   259.587801
     # 1           BT-20     0.715104  1003.095948
     # 2          BT-474     0.665241  1454.570673
@@ -500,17 +503,17 @@ if True:
     # cell_line                   332  non-null values
     # barcode                     332  non-null values
     # seeding_density_cells_ml    332  non-null values
-    # coefficient                 318  non-null values
+    # slope                       318  non-null values
     # intercept                   318  non-null values
     # dtypes: float64(3), object(2)
 
     ## 8. seeded.estimated_seeding_signal = \
     ##         np.round(seeded.intercept +
-    ##                  seeded.seeding_density_cells_ml * seeded.coefficient)
+    ##                  seeded.seeding_density_cells_ml * seeded.slope)
 
     seeded[u'estimated_seeding_signal'] = \
         np.round(seeded.intercept +
-                 seeded.seeding_density_cells_ml * seeded.coefficient)
+                 seeded.seeding_density_cells_ml * seeded.slope)
 
     # In [159]: seeded
     # Out[159]: 
@@ -520,12 +523,12 @@ if True:
     # cell_line                   332  non-null values
     # barcode                     332  non-null values
     # seeding_density_cells_ml    332  non-null values
-    # coefficient                 318  non-null values
+    # slope                       318  non-null values
     # intercept                   318  non-null values
     # estimated_seeding_signal    318  non-null values
     # dtypes: float64(4), object(2)
 
-    seeded = dropcols(seeded, [u'cell_line'])
+###    seeded = dropcols(seeded, [u'cell_line'])
 
     # In [161]: seeded
     # Out[161]: 
@@ -534,7 +537,7 @@ if True:
     # Data columns:
     # barcode                     332  non-null values
     # seeding_density_cells_ml    332  non-null values
-    # coefficient                 318  non-null values
+    # slope                       318  non-null values
     # intercept                   318  non-null values
     # estimated_seeding_signal    318  non-null values
     # dtypes: float64(4), object(1)
@@ -601,7 +604,7 @@ if True:
     # platedata.time = platedata.protocol_name.apply(lambda s: s[-4])
 
     platedata[u'time'] = platedata.protocol_name.apply(lambda s: s[-4])
-    platedata.barcode = platedata.barcode.apply(fix_barcode)
+    # platedata.barcode = platedata.barcode.apply(fix_barcode)
 
     for c in u'qcscore pass_fail manual_flag'.split():
         platedata[c] = platedata[c].apply(maybe_to_int)
@@ -708,7 +711,7 @@ if True:
     # created                   127488  non-null values
     # dtypes: float64(5), object(7)
 
-    welldata.barcode = welldata.barcode.apply(fix_barcode)
+    # welldata.barcode = welldata.barcode.apply(fix_barcode)
 
     for c in u'compound_number column'.split():
         welldata[c] = welldata[c].apply(maybe_to_int)
@@ -763,7 +766,7 @@ if True:
     # rcat                            127488  non-null values
     # compound_concentration_log10    127488  non-null values
     # seeding_density_cells_ml        127488  non-null values
-    # coefficient                     122112  non-null values
+    # slope                           122112  non-null values
     # intercept                       122112  non-null values
     # estimated_seeding_signal        122112  non-null values
     # dtypes: float64(5), object(9)
@@ -788,7 +791,7 @@ if True:
     # rcat                            127488  non-null values
     # compound_concentration_log10    127488  non-null values
     # seeding_density_cells_ml        127488  non-null values
-    # coefficient                     122112  non-null values
+    # slope                           122112  non-null values
     # intercept                       122112  non-null values
     # estimated_seeding_signal        122112  non-null values
     # qcscore                         127488  non-null values
@@ -818,7 +821,7 @@ if True:
     # rcat                            127488  non-null values
     # compound_concentration_log10    127488  non-null values
     # seeding_density_cells_ml        127488  non-null values
-    # coefficient                     122112  non-null values
+    # slope                           122112  non-null values
     # intercept                       122112  non-null values
     # estimated_seeding_signal        122112  non-null values
     # qcscore                         127488  non-null values
@@ -848,7 +851,7 @@ if True:
     # rcat                            127488  non-null values
     # compound_concentration_log10    127488  non-null values
     # seeding_density_cells_ml        127488  non-null values
-    # coefficient                     122112  non-null values
+    # slope                           122112  non-null values
     # intercept                       122112  non-null values
     # estimated_seeding_signal        122112  non-null values
     # qcscore                         127488  non-null values
@@ -879,7 +882,7 @@ if True:
     # rcat                            127488  non-null values
     # compound_concentration_log10    127488  non-null values
     # seeding_density_cells_ml        127488  non-null values
-    # coefficient                     122112  non-null values
+    # slope                           122112  non-null values
     # intercept                       122112  non-null values
     # estimated_seeding_signal        122112  non-null values
     # qcscore                         127488  non-null values
@@ -899,7 +902,7 @@ if True:
         (u'rcat replicate_group_id background_id control_id '
          u'cell_line compound_number compound_concentration_log10 time '
          u'signal '
-         u'barcode seeding_density_cells_ml intercept coefficient '
+         u'barcode seeding_density_cells_ml intercept slope '
          u'estimated_seeding_signal row column modified created '
          u'qcscore pass_fail manual_flag'.split()),
         axis=1)
@@ -921,7 +924,7 @@ if True:
     # barcode                         127488  non-null values
     # seeding_density_cells_ml        127488  non-null values
     # intercept                       122112  non-null values
-    # coefficient                     122112  non-null values
+    # slope                           122112  non-null values
     # estimated_seeding_signal        122112  non-null values
     # row                             127488  non-null values
     # column                          127488  non-null values
