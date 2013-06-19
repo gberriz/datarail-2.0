@@ -19,22 +19,17 @@ sub = dataset2cell(sub); sub = sub(2:end, :);
 n = length(sub);
 
 keys = cell([n 1]);
+key2id = containers.Map();
+j = 0;
 sep = native2unicode(28);
 for i = 1:n
-  keys{i} = CStr2String(sub(i), sep, false);
+  k = CStr2String(sub(i, :), sep, false);
+  keys{i} = k;
+  if ~isKey(key2id, k)
+    key2id(k) = sprintf('%d', j);
+    j = j + 1;
+  end
 end
 clear sub;
 
-ukeys = unique(keys);
-seen = containers.Map(ukeys, zeros(length(ukeys), 1, 'uint8') - 1);
-clear ukeys;
-
-c = zeros(n, 1, 'uint8');
-for i = 1:n
-  k = keys{i};
-  r = seen(k) + 1;
-  c(i) = r;
-  seen(k) = r;
-end
-
-out = arraymap(@(x) sprintf('%d', x), c);
+out = cellmap(@(x) key2id(x), keys);
