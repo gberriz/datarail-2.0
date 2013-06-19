@@ -41,7 +41,7 @@ if isempty(ExcelDateNumber)
 end
 
 % Excel date number must be numeric.
-if ~all(isnumeric(ExcelDateNumber(:)))
+if ~all(isnumber(ExcelDateNumber(:)))
     error(message('finance:x2mdate:nonNumericInput'));
 end
 
