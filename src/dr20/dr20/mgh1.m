@@ -150,6 +150,5 @@ welldata = ...
 
 %% ------------------------------------------------------------------------
 
-% export(welldata, 'file', outpath);
 save(outpath, 'welldata');
 clear outpath;
